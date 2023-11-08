@@ -24,6 +24,7 @@
  */
 package net.runelite.client.ui;
 
+import com.google.common.base.Strings;
 import com.google.inject.Inject;
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
@@ -145,7 +146,7 @@ public class ClientUI {
         this.clientThreadProvider = clientThreadProvider;
         this.eventBus = eventBus;
         this.safeMode = safeMode;
-        this.title = "Microbot " + ClientUI.proxyMessage;
+        this.title = title + (safeMode ? " (safe mode)" : "");
     }
 
     @Subscribe
@@ -243,7 +244,26 @@ public class ClientUI {
         // Keep scheduling event until we get our name
         clientThread.invokeLater(() ->
         {
-            frame.setTitle("Microbot " + ClientUI.proxyMessage);
+            if (client.getGameState() != GameState.LOGGED_IN)
+            {
+                return true;
+            }
+
+            final Player player = client.getLocalPlayer();
+
+            if (player == null)
+            {
+                return false;
+            }
+
+            final String name = player.getName();
+
+            if (Strings.isNullOrEmpty(name))
+            {
+                return false;
+            }
+
+            frame.setTitle(title + " - " + name);
             return true;
         });
     }
@@ -920,10 +940,10 @@ public class ClientUI {
             final Player player = ((Client) client).getLocalPlayer();
 
             if (player != null && player.getName() != null) {
-                frame.setTitle("Microbot " + ClientUI.proxyMessage);
+                frame.setTitle(title + " - " + player.getName());
             }
         } else {
-            frame.setTitle("Microbot " + ClientUI.proxyMessage);
+            frame.setTitle(title);
         }
 
         if (frame.isAlwaysOnTopSupported()) {

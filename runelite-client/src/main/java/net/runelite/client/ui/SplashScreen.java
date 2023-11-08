@@ -60,7 +60,7 @@ public class SplashScreen extends JFrame implements ActionListener
 	{
 		BufferedImage logo = ImageUtil.loadImageResource(SplashScreen.class, "runelite_transparent.png");
 
-		setTitle("Microbot");
+		setTitle("RuneLite Launcher");
 
 		setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
 		setUndecorated(true);

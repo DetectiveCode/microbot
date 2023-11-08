@@ -1,7 +1,9 @@
 <component name="ProjectRunConfigurationManager">
-  <configuration default="false" name="Runelite" type="Application" factoryName="Application" activateToolWindowBeforeRun="false" singleton="false">
+  <configuration default="false" name="Runelite Dev Mode" type="Application" factoryName="Application" singleton="false">
     <option name="MAIN_CLASS_NAME" value="net.runelite.client.RuneLite" />
     <module name="client" />
+    <option name="PROGRAM_PARAMETERS" value="--debug --developer-mode" />
+    <option name="VM_PARAMETERS" value="-ea" />
     <method v="2">
       <option name="Make" enabled="true" />
     </method>
