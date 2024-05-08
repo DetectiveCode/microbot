@@ -1,12 +1,8 @@
 package net.runelite.client.plugins.microbot.util.security;
 
-import net.runelite.api.GameState;
 import net.runelite.client.config.ConfigProfile;
 import net.runelite.client.plugins.microbot.Microbot;
-import net.runelite.client.plugins.microbot.util.globval.GlobalWidgetInfo;
-import net.runelite.client.plugins.microbot.util.keyboard.VirtualKeyboard;
-import net.runelite.client.plugins.microbot.util.menu.Rs2Menu;
-import net.runelite.client.plugins.microbot.util.widget.Rs2Widget;
+import net.runelite.client.plugins.microbot.util.keyboard.Rs2Keyboard;
 import net.runelite.client.util.WorldUtil;
 import net.runelite.http.api.worlds.World;
 import net.runelite.http.api.worlds.WorldRegion;
@@ -44,7 +40,7 @@ public class Login {
             Microbot.getMouse().click(365 + startingWidth, 308); //clicks a button "OK" when you've been disconnected
             sleep(600);
         }
-        VirtualKeyboard.keyPress(KeyEvent.VK_ENTER);
+        Rs2Keyboard.keyPress(KeyEvent.VK_ENTER);
         sleep(600);
         try {
             setWorld(world);
@@ -58,15 +54,18 @@ public class Login {
             throw new RuntimeException(e);
         }
         sleep(300);
-        VirtualKeyboard.keyPress(KeyEvent.VK_ENTER);
+        Rs2Keyboard.keyPress(KeyEvent.VK_ENTER);
         sleep(300);
-        VirtualKeyboard.keyPress(KeyEvent.VK_ENTER);
-    }
-
-    public boolean activateCondition() {
-        GameState idx = Microbot.getClient().getGameState();
-        return ((Rs2Menu.getIndex("Play") == 0 || (idx == GameState.LOGIN_SCREEN || idx == GameState.LOGGING_IN)) && activeProfile.getName() != null)
-                || (idx == GameState.LOGGED_IN && Rs2Widget.getWidget(GlobalWidgetInfo.LOGIN_MOTW_TEXT.getPackedId(), 0) != null);
+        Rs2Keyboard.keyPress(KeyEvent.VK_ENTER);
+        if (Microbot.getClient().getLoginIndex() == 10) {
+            int loginScreenWidth = 804;
+            int startingWidth = (Microbot.getClient().getCanvasWidth() / 2) - (loginScreenWidth / 2);
+            Microbot.getMouse().click(365 + startingWidth, 250); //clicks a button "OK" when you've been disconnected
+        } else if (Microbot.getClient().getLoginIndex() == 9) {
+            int loginScreenWidth = 804;
+            int startingWidth = (Microbot.getClient().getCanvasWidth() / 2) - (loginScreenWidth / 2);
+            Microbot.getMouse().click(365 + startingWidth, 300); //clicks a button "OK" when you've been disconnected
+        }
     }
 
     public void setWorld(int worldNumber) {

@@ -1,72 +1,70 @@
 package net.runelite.client.plugins.microbot.thieving;
 
 import net.runelite.api.EquipmentInventorySlot;
-import net.runelite.api.ItemComposition;
-import net.runelite.api.ItemID;
 import net.runelite.api.Skill;
-import net.runelite.api.widgets.Widget;
 import net.runelite.client.plugins.microbot.Microbot;
 import net.runelite.client.plugins.microbot.Script;
+import net.runelite.client.plugins.microbot.thieving.enums.ThievingNpc;
 import net.runelite.client.plugins.microbot.util.bank.Rs2Bank;
-import net.runelite.client.plugins.microbot.util.inventory.Inventory;
+import net.runelite.client.plugins.microbot.util.inventory.Rs2Inventory;
+import net.runelite.client.plugins.microbot.util.inventory.Rs2Item;
 import net.runelite.client.plugins.microbot.util.npc.Rs2Npc;
 import net.runelite.client.plugins.timers.TimersPlugin;
 
-import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
 
 import static net.runelite.client.plugins.microbot.util.equipment.Rs2Equipment.getEquippedItem;
-import static net.runelite.client.plugins.microbot.util.inventory.Inventory.eat;
 import static net.runelite.client.plugins.microbot.util.math.Random.random;
 
 public class ThievingScript extends Script {
 
-    public static double version = 1.0;
+    public static double version = 1.2;
 
     public boolean run(ThievingConfig config) {
         mainScheduledFuture = scheduledExecutorService.scheduleWithFixedDelay(() -> {
             if (!super.run()) return;
             try {
-                Widget[] foods = Microbot.getClientThread().runOnClientThread(() -> Inventory.getInventoryFood());
-                if (foods.length == 0) {
-
-                    if (Inventory.count() > 3) {
-                        Inventory.dropAllStartingFrom(3);
-                        return;
-                    }
+                List<Rs2Item> foods = Microbot.getClientThread().runOnClientThread(Rs2Inventory::getInventoryFood);
+                if (foods.isEmpty()) {
+                    Microbot.status = "Getting food from bank...";
                     if (Rs2Bank.walkToBank()) {
                         Rs2Bank.useBank();
-                        Rs2Bank.withdrawItemX(true, "monkfish", 5);
-                        final ItemComposition amulet = getEquippedItem(EquipmentInventorySlot.AMULET);
+                        Rs2Bank.withdrawX(true, config.food().getName(), config.foodAmount(), true);
+                        final Rs2Item amulet = getEquippedItem(EquipmentInventorySlot.AMULET);
                         if (amulet == null) {
                             Rs2Bank.withdrawItem(true, "dodgy necklace");
                         }
                         Rs2Bank.closeBank();
                         sleep(1000, 2000);
-                        Inventory.useItem(ItemID.DODGY_NECKLACE);
+                        Rs2Inventory.wield("dodgy necklace");
                     }
                     return;
                 }
-                if (Inventory.isFull()) {
-                    Inventory.dropAllStartingFrom(8);
+                if (Rs2Inventory.isFull()) {
+                    Rs2Inventory.dropAllExcept(config.keepItemsAboveValue(), true);
                 }
-                if (Inventory.hasItemAmountStackable("coin pouch", 28)) {
-                    Inventory.interact("coin pouch");
-                }
+                openCoinPouches(config);
                 if (Microbot.getClient().getBoostedSkillLevel(Skill.HITPOINTS) > config.hitpoints()) {
-                    if (random(1, 10) == 2)
-                        sleepUntil(() -> TimersPlugin.t == null || !TimersPlugin.t.render());
-                    if (Rs2Npc.interact(config.THIEVING_NPC().getName(), "pickpocket")) {
-                        sleep(300, 600);
+                    if (config.THIEVING_NPC() != ThievingNpc.NONE) {
+                        if (random(1, 10) == 2)
+                            sleepUntil(() -> TimersPlugin.t == null || !TimersPlugin.t.render());
+                        if (config.THIEVING_NPC() == ThievingNpc.ELVES) {
+                            handleElves();
+                        } else {
+                            if (Rs2Npc.pickpocket(config.THIEVING_NPC().getName())) {
+                                Microbot.status = "Pickpocketting " + config.THIEVING_NPC().getName();
+                                sleep(300, 600);
+                            }
+                        }
+
                     }
                 } else {
-
-                    for (Widget food : foods) {
-                        eat(food);
+                    for (Rs2Item food : foods) {
+                        Rs2Inventory.interact(food, "eat");
                         if (random(1, 10) == 2) { //double eat
-                            eat(food);
+                            Rs2Inventory.interact(food, "eat");
                         }
                         break;
                     }
@@ -78,65 +76,33 @@ public class ThievingScript extends Script {
         return true;
     }
 
-    List<String> supportedFoods = new ArrayList<>(Arrays
-            .asList("monkfish", "lobster", "bass", "tuna", "swordfish", "salmon", "trout"));
-
-    public boolean run(net.runelite.api.NPC npc) {
-        mainScheduledFuture = scheduledExecutorService.scheduleWithFixedDelay(() -> {
-            if (!super.run()) return;
-            try {
-                Widget[] foods = Microbot.getClientThread().runOnClientThread(() -> Inventory.getInventoryFood());
-                if (foods.length == 0) {
-
-                    if (Inventory.count() > 3) {
-                        Inventory.dropAllStartingFrom(3);
-                        return;
-                    }
-                    if (Rs2Bank.walkToBank()) {
-                        Rs2Bank.useBank();
-                        for (String supportedFood: supportedFoods) {
-                            if (Microbot
-                                    .getClientThread()
-                                    .runOnClientThread(() -> Inventory.getInventoryFood()).length != 0)
-                                break;
-                            Rs2Bank.withdrawItemX(true, supportedFood, 5);
-                        }
-                        final ItemComposition amulet = getEquippedItem(EquipmentInventorySlot.AMULET);
-                        if (amulet == null) {
-                            Rs2Bank.withdrawItem(true, "dodgy necklace");
-                        }
-                        Rs2Bank.closeBank();
-                        sleep(1000, 2000);
-                        Inventory.useItem(ItemID.DODGY_NECKLACE);
-                    }
-                    return;
-                }
-                if (Inventory.isFull()) {
-                    Inventory.dropAllStartingFrom(8);
-                }
-                if (Inventory.hasItemAmountStackable("coin pouch", 28)) {
-                    Inventory.interact("coin pouch");
-                }
-                if (Microbot.getClient().getBoostedSkillLevel(Skill.HITPOINTS) > 20) {
-                    if (random(1, 10) == 2)
-                        sleepUntil(() -> TimersPlugin.t == null || !TimersPlugin.t.render());
-                    if (Rs2Npc.interact(npc.getName(), "pickpocket")) {
-                        sleep(300, 600);
-                    }
-                } else {
-
-                    for (Widget food : foods) {
-                        eat(food);
-                        if (random(1, 10) == 2) { //double eat
-                            eat(food);
-                        }
-                        break;
-                    }
-                }
-            } catch (Exception ex) {
-                System.out.println(ex.getMessage());
+    private void handleElves() {
+        List<String> names = Arrays.asList(
+                "Anaire", "Aranwe", "Aredhel", "Caranthir", "Celebrian", "Celegorm",
+                "Cirdan", "Curufin", "Earwen", "Edrahil", "Elenwe", "Elladan", "Enel",
+                "Erestor", "Enerdhil", "Enelye", "Feanor", "Findis", "Finduilas",
+                "Fingolfin", "Fingon", "Galathil", "Gelmir", "Glorfindel", "Guilin",
+                "Hendor", "Idril", "Imin", "Iminye", "Indis", "Ingwe", "Ingwion",
+                "Lenwe", "Lindir", "Maeglin", "Mahtan", "Miriel", "Mithrellas",
+                "Nellas", "Nerdanel", "Nimloth", "Oropher", "Orophin", "Saeros",
+                "Salgant", "Tatie", "Thingol", "Turgon", "Vaire"
+        );
+        net.runelite.api.NPC npc = Rs2Npc.getNpcs()
+                .filter(x -> names.stream()
+                        .anyMatch(n -> n.equalsIgnoreCase(x.getName())))
+                .findFirst()
+                .orElse(null);
+        if (npc != null) {
+            if (Rs2Npc.pickpocket(npc)) {
+                Microbot.status = "Pickpocketting " + npc.getName();
+                sleep(300, 600);
             }
-        }, 0, 600, TimeUnit.MILLISECONDS);
-        return true;
+        }
+    }
+
+    private void openCoinPouches(ThievingConfig config) {
+        if (Rs2Inventory.hasItemAmount("coin pouch", config.coinPouchTreshHold(), true)) {
+            Rs2Inventory.interact("coin pouch", "open-all");
+        }
     }
 }

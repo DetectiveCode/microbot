@@ -6,6 +6,7 @@ import lombok.RequiredArgsConstructor;
 @Getter
 @RequiredArgsConstructor
 public enum ThievingNpc {
+    NONE("None", 0),
     MEN("man", 1),
     WOMAN("woman", 1),
     FARMER("farmer", 10),
@@ -13,7 +14,8 @@ public enum ThievingNpc {
     ROGUE("rogue", 32),
     MASTER_FARMER("master farmer", 38),
     GUARD("guard", 40),
-    ARDOUGNE_KNIGHT("knight of ardougne", 55);
+    ARDOUGNE_KNIGHT("knight of ardougne", 55),
+    ELVES("Elves", 85);
 
     private final String name;
     private final int thievingLevel;

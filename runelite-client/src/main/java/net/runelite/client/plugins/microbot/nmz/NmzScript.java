@@ -5,14 +5,16 @@ import net.runelite.api.coords.WorldPoint;
 import net.runelite.api.widgets.Widget;
 import net.runelite.client.plugins.microbot.Microbot;
 import net.runelite.client.plugins.microbot.Script;
+import net.runelite.client.plugins.microbot.playerassist.combat.PrayerPotionScript;
 import net.runelite.client.plugins.microbot.util.combat.Rs2Combat;
 import net.runelite.client.plugins.microbot.util.gameobject.Rs2GameObject;
-import net.runelite.client.plugins.microbot.util.inventory.Inventory;
-import net.runelite.client.plugins.microbot.util.keyboard.VirtualKeyboard;
+import net.runelite.client.plugins.microbot.util.inventory.Rs2Inventory;
+import net.runelite.client.plugins.microbot.util.keyboard.Rs2Keyboard;
 import net.runelite.client.plugins.microbot.util.math.Random;
 import net.runelite.client.plugins.microbot.util.npc.Rs2Npc;
-import net.runelite.client.plugins.microbot.util.prayer.Prayer;
 import net.runelite.client.plugins.microbot.util.prayer.Rs2Prayer;
+import net.runelite.client.plugins.microbot.util.prayer.Rs2PrayerEnum;
+import net.runelite.client.plugins.microbot.util.walker.Rs2Walker;
 import net.runelite.client.plugins.microbot.util.widget.Rs2Widget;
 
 import java.util.concurrent.TimeUnit;
@@ -21,23 +23,30 @@ import static net.runelite.api.Varbits.NMZ_ABSORPTION;
 
 public class NmzScript extends Script {
 
-    public static double version = 1.9;
+    public static double version = 2.0;
 
     public static NmzConfig config;
 
     public static boolean useOverload = false;
 
+    public static PrayerPotionScript prayerPotionScript;
+
     public boolean canStartNmz() {
-        return Inventory.hasItemAmount("overload (4)", config.overloadPotionAmount()) && Inventory.hasItemAmount("absorption (4)", config.absorptionPotionAmount());
+        return Rs2Inventory.count("overload (4)") == config.overloadPotionAmount() && Rs2Inventory.count("absorption (4)") == config.absorptionPotionAmount() ||
+                (Rs2Inventory.hasItem("prayer potion") && config.togglePrayerPotions());
     }
 
 
     public boolean run(NmzConfig config) {
         NmzScript.config = config;
+        prayerPotionScript = new PrayerPotionScript();
         mainScheduledFuture = scheduledExecutorService.scheduleWithFixedDelay(() -> {
             if (!super.run()) return;
             if (!Microbot.isLoggedIn()) return;
             try {
+                if (Random.random(1, 50) == 1 && config.randomMouseMovements()) {
+                    Microbot.getMouse().click(Random.random(0, Microbot.getClient().getCanvasWidth()), Random.random(0, Microbot.getClient().getCanvasHeight()), true);
+                }
                 boolean isOutsideNmz = Microbot.getClient().getLocalPlayer().getWorldLocation().distanceTo(new WorldPoint(2602, 3116, 0)) < 20;
                 useOverload = Microbot.getClient().getBoostedSkillLevel(Skill.RANGED) == Microbot.getClient().getRealSkillLevel(Skill.RANGED);
                 if (isOutsideNmz) {
@@ -54,19 +63,31 @@ public class NmzScript extends Script {
 
     public void handleOutsideNmz() {
         boolean hasStartedDream = Microbot.getVarbitValue(3946) > 0;
+        if (config.togglePrayerPotions())
+            Rs2Prayer.toggle(Rs2PrayerEnum.PROTECT_MELEE, false);
         if (!hasStartedDream) {
             startNmzDream();
         } else {
+            final String overload = "Overload (4)";
+            final String absorption = "Absorption (4)";
+            storePotions(ObjectID.OVERLOAD_POTION, "overload", config.overloadPotionAmount());
+            storePotions(ObjectID.ABSORPTION_POTION, "absorption", config.absorptionPotionAmount());
+            handleStore();
+            fetchPotions(ObjectID.OVERLOAD_POTION, overload, config.overloadPotionAmount());
+            fetchPotions(ObjectID.ABSORPTION_POTION, absorption, config.absorptionPotionAmount());
             if (canStartNmz()) {
                 consumeEmptyVial();
-                return;
+            } else {
+                Microbot.showMessage("Bot can't start because your overloads or absorption potions do not match the configured number in your plugin settings.");
+                sleep(2000);
             }
-            manageInventoryOutsideNmz();
-            handleStore();
         }
     }
 
     public void handleInsideNmz() {
+        prayerPotionScript.run();
+        if (config.togglePrayerPotions())
+            Rs2Prayer.toggle(Rs2PrayerEnum.PROTECT_MELEE, true);
         useZapperIfConfigured();
         useOverloadPotion();
         manageLocatorOrb();
@@ -81,8 +102,8 @@ public class NmzScript extends Script {
         sleepUntil(() -> Rs2Widget.hasWidget("Click here to continue"));
         Rs2Widget.clickWidget("Click here to continue");
         sleepUntil(() -> Rs2Widget.hasWidget("Agree to pay"));
-        VirtualKeyboard.typeString("1");
-        VirtualKeyboard.enter();
+        Rs2Keyboard.typeString("1");
+        Rs2Keyboard.enter();
     }
 
     public void useZapperIfConfigured() {
@@ -95,31 +116,41 @@ public class NmzScript extends Script {
     public void interactWithObject(int objectId) {
         TileObject rs2GameObject = Rs2GameObject.findObjectById(objectId);
         if (rs2GameObject != null) {
-            Microbot.getWalker().walkFastLocal(rs2GameObject.getLocalLocation());
+            Rs2Walker.walkFastLocal(rs2GameObject.getLocalLocation());
             sleepUntil(() -> Microbot.getClient().getLocalPlayer().getWorldLocation().distanceTo(rs2GameObject.getWorldLocation()) < 5);
             Rs2GameObject.interact(objectId);
         }
     }
 
     public void manageLocatorOrb() {
-        if (Inventory.hasItem(ItemID.LOCATOR_ORB)) {
+        if (Rs2Inventory.hasItem(ItemID.LOCATOR_ORB)) {
             handleLocatorOrbUsage();
             randomlyToggleRapidHeal();
+        } else if (Rs2Inventory.hasItem(ItemID.DWARVEN_ROCK_CAKE_7510)) {
+            handleDwarvenRockCake();
+            randomlyToggleRapidHeal();
+        }
+    }
+
+    private void handleDwarvenRockCake() {
+        if (Microbot.getClient().getBoostedSkillLevel(Skill.HITPOINTS) > Random.random(1, 5) && !useOverload
+                && Microbot.getClient().getBoostedSkillLevel(Skill.RANGED) != Microbot.getClient().getRealSkillLevel(Skill.RANGED)) {
+            Rs2Inventory.interact(ItemID.DWARVEN_ROCK_CAKE_7510, "guzzle");
         }
     }
 
     public void handleLocatorOrbUsage() {
         if (Microbot.getClient().getBoostedSkillLevel(Skill.HITPOINTS) > Random.random(1, 5) && !useOverload
                 && Microbot.getClient().getBoostedSkillLevel(Skill.RANGED) != Microbot.getClient().getRealSkillLevel(Skill.RANGED)) {
-            Inventory.useItemFast(ItemID.LOCATOR_ORB, "feel");
+            Rs2Inventory.interact(ItemID.LOCATOR_ORB, "feel");
         }
     }
 
     public void randomlyToggleRapidHeal() {
         if (Random.random(1, 50) == 2) {
-            Rs2Prayer.fastPray(Prayer.RAPID_HEAL, true);
+            Rs2Prayer.toggle(Rs2PrayerEnum.RAPID_HEAL, true);
             sleep(300, 600);
-            Rs2Prayer.fastPray(Prayer.RAPID_HEAL, false);
+            Rs2Prayer.toggle(Rs2PrayerEnum.RAPID_HEAL, false);
         }
     }
 
@@ -130,63 +161,75 @@ public class NmzScript extends Script {
     }
 
     public void useOverloadPotion() {
-        if (useOverload && Inventory.hasItemContains("overload") && Microbot.getClient().getBoostedSkillLevel(Skill.HITPOINTS) > 50) {
-            Inventory.interact(new String[]{"overload (4)", "overload (3)", "overload (2)", "overload (1)"});
+        if (useOverload && Rs2Inventory.hasItem("overload") && Microbot.getClient().getBoostedSkillLevel(Skill.HITPOINTS) > 50) {
+            Rs2Inventory.interact(x -> x.name.toLowerCase().contains("overload"), "drink");
             sleep(10000);
         }
     }
 
     public void useAbsorptionPotion() {
-        if (Microbot.getVarbitValue(NMZ_ABSORPTION) < Random.random(300, 600) && Inventory.hasItemContains("absorption")) {
+        if (Microbot.getVarbitValue(NMZ_ABSORPTION) < Random.random(300, 600) && Rs2Inventory.hasItem("absorption")) {
             for (int i = 0; i < Random.random(1, 5); i++) {
-                Inventory.interact(new String[]{"absorption (4)", "absorption (3)", "absorption (2)", "absorption (1)"});
+                Rs2Inventory.interact(x -> x.name.toLowerCase().contains("absorption"), "drink");
                 sleep(600, 1000);
             }
         }
     }
 
-    public void manageInventoryOutsideNmz() {
-        managePotionInventory(ObjectID.OVERLOAD_POTION, "overload", config.overloadPotionAmount(), "32");
-        managePotionInventory(ObjectID.ABSORPTION_POTION, "absorption", config.absorptionPotionAmount(), "80");
+    private void storePotions(int objectId, String itemName, int requiredAmount) {
+        if (Rs2Inventory.count(itemName) == requiredAmount) return;
+        if (Rs2Inventory.get(itemName) == null) return;
+
+        Rs2GameObject.interact(objectId, "Store");
+        String storeWidgetText = "Store all your ";
+        sleepUntil(() -> Rs2Widget.hasWidget(storeWidgetText));
+        if (Rs2Widget.hasWidget(storeWidgetText)) {
+            Rs2Keyboard.typeString("1");
+            Rs2Keyboard.enter();
+            sleepUntil(() -> !Rs2Inventory.hasItem(objectId));
+        }
     }
 
-    public void managePotionInventory(int objectId, String itemName, int requiredAmount, String keyboardInput) {
-        if (!Inventory.hasItemAmountExact(itemName, requiredAmount)) {
-            Rs2GameObject.interact(objectId, "Store");
-            String storeWidgetText = "Store all your " + itemName + " potion?";
-            sleepUntil(() -> Rs2Widget.hasWidget(storeWidgetText));
-            if (Rs2Widget.hasWidget(storeWidgetText)) {
-                VirtualKeyboard.typeString("1");
-                VirtualKeyboard.enter();
-                sleepUntil(() -> !Inventory.hasItem(objectId));
-            }
-            Rs2GameObject.interact(objectId, "Take");
-            String widgetText = "How many doses of " + itemName;
-            sleepUntil(() -> Rs2Widget.hasWidget(widgetText));
-            if (Rs2Widget.hasWidget(widgetText)) {
-                VirtualKeyboard.typeString(keyboardInput);
-                VirtualKeyboard.enter();
-                sleepUntil(() -> Inventory.hasItemAmountExact(itemName + " (4)", requiredAmount));
-            }
+    private void fetchPotions(int objectId, String itemName, int requiredAmount) {
+        if (Rs2Inventory.count(itemName) == requiredAmount) return;
+
+        Rs2GameObject.interact(objectId, "Take");
+        String widgetText = "How many doses of ";
+        sleepUntil(() -> Rs2Widget.hasWidget(widgetText));
+        if (Rs2Widget.hasWidget(widgetText)) {
+            Rs2Keyboard.typeString(Integer.toString(requiredAmount * 4));
+            Rs2Keyboard.enter();
+            sleepUntil(() -> Rs2Inventory.count(itemName) == requiredAmount);
         }
     }
 
     public void consumeEmptyVial() {
         final int EMPTY_VIAL = 26291;
         Rs2GameObject.interact(EMPTY_VIAL, "drink");
-        sleepUntil(() -> Rs2Widget.hasWidget("Nightmare zone"));
-        Rs2Widget.clickWidget(8454150);
-        sleep(5000);
+        Widget widget = Rs2Widget.getWidget(129, 6);
+        System.out.println(Microbot.getClientThread().runOnClientThread(widget::isHidden));
+        if (widget != null && !Microbot.getClientThread().runOnClientThread(widget::isHidden)) {
+            Rs2Widget.clickWidget(widget.getId());
+            sleep(300);
+            Rs2Widget.clickWidget(widget.getId());
+            //Rs2Widget.clickWidgetFast(8454150, MenuAction.WIDGET_CONTINUE);
+            // MenuEntryImpl(getOption=Continue, getTarget=, getIdentifier=0, getType=WIDGET_CONTINUE, getParam0=-1, getParam1=8454150, getItemId=-1, isForceLeftClick=false, isDeprioritized=false)
+            sleep(5000);
+        }
     }
 
     public void handleStore() {
+        if (canStartNmz()) return;
         int varbitOverload = 3953;
         int varbitAbsorption = 3954;
         int overloadAmt = Microbot.getVarbitValue(varbitOverload);
         int absorptionAmt = Microbot.getVarbitValue(varbitAbsorption);
         int nmzPoints = Microbot.getVarbitPlayerValue(VarPlayer.NMZ_REWARD_POINTS);
 
-        if (!Inventory.isFull()) {
+        if (absorptionAmt > config.absorptionPotionAmount() * 4 && overloadAmt > config.overloadPotionAmount() * 4)
+            return;
+
+        if (!Rs2Inventory.isFull()) {
             if ((absorptionAmt < (config.absorptionPotionAmount() * 4) || overloadAmt < config.overloadPotionAmount() * 4) && nmzPoints < 100000) {
                 Microbot.showMessage("BOT SHUTDOWN: Not enough points to buy potions");
                 shutdown();

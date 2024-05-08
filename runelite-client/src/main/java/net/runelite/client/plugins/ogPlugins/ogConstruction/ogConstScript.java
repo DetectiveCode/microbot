@@ -3,15 +3,12 @@ package net.runelite.client.plugins.ogPlugins.ogConstruction;
 import net.runelite.api.ObjectID;
 import net.runelite.api.events.GameObjectSpawned;
 import net.runelite.api.events.GameTick;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
-
 import net.runelite.client.config.Config;
 import net.runelite.client.plugins.microbot.Microbot;
 import net.runelite.client.plugins.microbot.Script;
 import net.runelite.client.plugins.microbot.util.gameobject.Rs2GameObject;
-import net.runelite.client.plugins.microbot.util.inventory.Inventory;
-import net.runelite.client.plugins.microbot.util.keyboard.VirtualKeyboard;
+import net.runelite.client.plugins.microbot.util.inventory.Rs2Inventory;
+import net.runelite.client.plugins.microbot.util.keyboard.Rs2Keyboard;
 import net.runelite.client.plugins.microbot.util.math.Random;
 import net.runelite.client.plugins.microbot.util.npc.Rs2Npc;
 import net.runelite.client.plugins.microbot.util.tabs.Rs2Tab;
@@ -21,6 +18,8 @@ import net.runelite.client.plugins.ogPlugins.ogConstruction.enums.Furniture;
 
 import java.awt.event.KeyEvent;
 import java.util.concurrent.TimeUnit;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 
 public class ogConstScript extends Script {
@@ -119,7 +118,7 @@ public class ogConstScript extends Script {
         if(Rs2Widget.getWidget(30015493) != null){
             callDelay();
             if(logging){System.out.println("Selecting build option");}
-            VirtualKeyboard.typeString(String.valueOf(furniture.getBuildOption()));
+            Rs2Keyboard.typeString(String.valueOf(furniture.getBuildOption()));
             callDelay();
         }
         sleepUntil(this::checkFurnitureBuilt, Random.random(800,900));
@@ -129,7 +128,7 @@ public class ogConstScript extends Script {
         if(logging){System.out.println("===========================DESTROY FUNCTION CALLED===========================");}
         if(logging){System.out.println("Destroying:" + furniture.getBuiltID());}
         if(furniture.getBuiltID() == ObjectID.DOOR_13344 &&
-                !Inventory.hasItemAmount(furniture.getPlankNeeded(), furniture.getPlankAmountNeeded()) &&
+                !Rs2Inventory.hasItemAmount(furniture.getPlankNeeded(), furniture.getPlankAmountNeeded()) &&
                 !checkIfButlerHere() &&
                 !(currentGameTick > gameTickLastSentButler + (butler.getTicksNeededToBank() + 2))){
                     if(logging){System.out.println("Sleeping until: checkButlerNearPlayer");}
@@ -148,7 +147,7 @@ public class ogConstScript extends Script {
             }
             else{
                 callDelay();
-                VirtualKeyboard.typeString("1");
+                Rs2Keyboard.typeString("1");
                 if(logging){System.out.println("Selecting Yes");}
             }
         }
@@ -162,23 +161,27 @@ public class ogConstScript extends Script {
         if(Rs2Widget.findWidget("The moneybag ") != null){
             if(Random.random(1,100) == 3){
                 Rs2Widget.clickWidget("Click here to continue");
-            } else {VirtualKeyboard.keyPress(KeyEvent.VK_SPACE);}
+            } else {
+                Rs2Keyboard.keyPress(KeyEvent.VK_SPACE);}
         }
         sleepUntil(()-> Rs2Widget.findWidget("Select an Option") != null,Random.random(600,700));
-        if(Rs2Widget.findWidget("Select an Option") != null){VirtualKeyboard.typeString("1");}
+        if(Rs2Widget.findWidget("Select an Option") != null){
+            Rs2Keyboard.typeString("1");}
         sleepUntil(()-> Rs2Widget.findWidget("How many coins do you wish to deposit?") != null,Random.random(600,700));
-        if(Rs2Widget.findWidget("How many coins do you wish to deposit?") != null){VirtualKeyboard.typeString(moneyBagTopUpAmount);}
-        VirtualKeyboard.keyPress(KeyEvent.VK_ENTER);
+        if(Rs2Widget.findWidget("How many coins do you wish to deposit?") != null){
+            Rs2Keyboard.typeString(moneyBagTopUpAmount);}
+        Rs2Keyboard.keyPress(KeyEvent.VK_ENTER);
         sleepUntil(()-> Rs2Widget.findWidget("The moneybag ") != null,Random.random(600,700));
         if(logging){System.out.println("String detected: " + (Rs2Widget.findWidget("The moneybag ")).getText());}
         this.coinsLeftInMoneyBag = extractNumber((Rs2Widget.findWidget("The moneybag ")).getText());
         if(logging){System.out.println("Coins now in money bag: "+ coinsLeftInMoneyBag);}
-        VirtualKeyboard.keyPress(KeyEvent.VK_SPACE);
+        Rs2Keyboard.keyPress(KeyEvent.VK_SPACE);
     }
     private void sendButler(){
         Microbot.status = "Sending Butler Out";
         if(logging){System.out.println("===========================SEND BUTLER FUNCTION CALLED===========================");}
-        if(Rs2Widget.findWidget("Master, I have returned with") != null){VirtualKeyboard.keyPress(KeyEvent.VK_SPACE);return;}
+        if(Rs2Widget.findWidget("Master, I have returned with") != null){
+            Rs2Keyboard.keyPress(KeyEvent.VK_SPACE);return;}
         if(logging){System.out.println("Chatbox message: " + Rs2Widget.getChildWidgetText(10616888,0));}
         if(!checkIfButlerHere() ||
                 !checkButlerNearPlayer() || (Rs2Widget.getChildWidgetText(10616888,0)).contains("I can't reach that!")){
@@ -190,9 +193,10 @@ public class ogConstScript extends Script {
                 Rs2Widget.clickWidget(24248342);
                 callDelay();
                 if(logging){System.out.println("Pressing ESC");}
-                VirtualKeyboard.keyPress(KeyEvent.VK_ESCAPE);
+                Rs2Keyboard.keyPress(KeyEvent.VK_ESCAPE);
             }
-            if(Rs2Widget.findWidget("Master, I have returned with") != null){VirtualKeyboard.keyPress(KeyEvent.VK_SPACE);return;}
+            if(Rs2Widget.findWidget("Master, I have returned with") != null){
+                Rs2Keyboard.keyPress(KeyEvent.VK_SPACE);return;}
             if(logging){System.out.println("Sleeping until butler near player, 1000 - 2000");}
             sleepUntil(this::checkButlerNearPlayer, Random.random(1000,2000));
         } else if (checkButlerNearPlayer()){
@@ -202,21 +206,22 @@ public class ogConstScript extends Script {
             this.coinsLeftInMoneyBag = 0;
             if(Random.random(1,10) == 3){
                 Rs2Widget.clickWidget("Click here to continue");
-            } else {VirtualKeyboard.keyPress(KeyEvent.VK_SPACE);}
+            } else {
+                Rs2Keyboard.keyPress(KeyEvent.VK_SPACE);}
             sleepUntil(()-> Rs2Widget.findWidget("Select an option") != null);
-            VirtualKeyboard.typeString("1");
+            Rs2Keyboard.typeString("1");
         }
         if(logging){System.out.println("Looking for: Repeat last task?");}
         sleepUntil(()-> Rs2Widget.findWidget("Repeat last task?") != null || (Rs2Widget.getChildWidgetText(10616888,0)).contains("I can't reach that!"), Random.random(800,900));
         if(Rs2Widget.findWidget("Repeat last task?") != null){
             callDelay();
-            VirtualKeyboard.typeString("1");
+            Rs2Keyboard.typeString("1");
             callDelay();
             sleepUntil(() -> !checkIfButlerHere(),Random.random(600,700));
             gameTickLastSentButler = currentGameTick;
         }
         Rs2Tab.switchToInventoryTab();
-        sleepUntil(() -> Inventory.hasItemAmount(furniture.getPlankNeeded(), furniture.getPlankAmountNeeded()) || checkButlerNearPlayer(),Random.random(10000,13000));
+        sleepUntil(() -> Rs2Inventory.hasItemAmount(furniture.getPlankNeeded(), furniture.getPlankAmountNeeded()) || checkButlerNearPlayer(),Random.random(10000,13000));
     }
     //TODO Update butlers fetch to correct planks if needed - more regex
     private void updateButlerAction(){}
@@ -283,17 +288,17 @@ public class ogConstScript extends Script {
         Microbot.status = "Calculating State";
         if(logging){System.out.println("===========================CALC STATE FUNCTION CALLED===========================");}
         if(Microbot.getClientThread().runOnClientThread(() -> Microbot.getClient().getVarbitValue(2176)) == 0){ status = State.ENABLE_BUILDING_MODE; }
-        else if(!(Inventory.hasItemAmountStackable(furniture.getNotedPlankNameNeeded(),furniture.getPlankAmountNeeded()) || Inventory.hasItemAmountStackable("Coins",10000))){status = State.LOGOUT;}
+        else if(!(Rs2Inventory.hasItemAmount(furniture.getNotedPlankNameNeeded(),furniture.getPlankAmountNeeded(), true) || Rs2Inventory.hasItemAmount("Coins",10000, true))){status = State.LOGOUT;}
         else if(moneyBagTopUpNeeded()){status = State.FILL_MONEY_BAG;}
         else if(Rs2GameObject.findObjectByIdAndDistance(furniture.getBuiltID(),20) != null){status = State.DESTROY;}
-        else if(!Inventory.hasItemAmount(furniture.getPlankNeeded(),(furniture.getPlankAmountNeeded()*2)+1) && (currentGameTick > gameTickLastSentButler + (butler.getTicksNeededToBank() + 2) )){status = State.SEND_BUTLER;}
-        else if(Rs2GameObject.findObjectByIdAndDistance(furniture.getUnBuiltID(),20) != null && Inventory.hasItemAmount(furniture.getPlankNeeded(), furniture.getPlankAmountNeeded())){status = State.BUILDING;}
+        else if(!Rs2Inventory.hasItemAmount(furniture.getPlankNeeded(),(furniture.getPlankAmountNeeded()*2)+1) && (currentGameTick > gameTickLastSentButler + (butler.getTicksNeededToBank() + 2) )){status = State.SEND_BUTLER;}
+        else if(Rs2GameObject.findObjectByIdAndDistance(furniture.getUnBuiltID(),20) != null && Rs2Inventory.hasItemAmount(furniture.getPlankNeeded(), furniture.getPlankAmountNeeded())){status = State.BUILDING;}
         if(logging){System.out.println("Calculating State: " + status.name());}
         if(logging){System.out.println("Current Game Tick: " + currentGameTick);}
         if(logging){System.out.println("Game Tick last sent butler: " + gameTickLastSentButler);}
         if(logging){System.out.println("Should send butler: " + (currentGameTick > gameTickLastSentButler + (butler.getTicksNeededToBank() + 2)));}
-        if(logging){System.out.println("Calculating Noted Planks: " + Inventory.hasItemAmountStackable(furniture.getNotedPlankNameNeeded(), furniture.getPlankAmountNeeded()));}
-        if(logging){System.out.println("Calculating Coins: " + Inventory.hasItemAmountStackable("Coins",10000));}
+        if(logging){System.out.println("Calculating Noted Planks: " + Rs2Inventory.hasItemAmount(furniture.getNotedPlankNameNeeded(), furniture.getPlankAmountNeeded(), true));}
+        if(logging){System.out.println("Calculating Coins: " + Rs2Inventory.hasItemAmount("Coins",10000, true));}
         if(logging){System.out.println("Need to refill money bag?: " + (moneyBagRefillThreshold >= coinsLeftInMoneyBag) );}
         if(logging){System.out.println("Refill amount: " + moneyBagRefillThreshold);}
         if(logging){System.out.println("Money Bag amount: " + coinsLeftInMoneyBag);}

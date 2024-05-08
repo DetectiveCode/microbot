@@ -6,22 +6,61 @@ import net.runelite.api.MenuEntry;
 import net.runelite.api.NPC;
 import net.runelite.api.ObjectID;
 import net.runelite.client.plugins.microbot.Microbot;
+import net.runelite.client.plugins.microbot.util.keyboard.Rs2Keyboard;
+import net.runelite.client.plugins.microbot.util.math.Random;
 
+import java.awt.event.KeyEvent;
 import java.lang.reflect.Field;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
+import java.lang.reflect.Modifier;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.stream.Collectors;
 
 public class Rs2Reflection {
+    static String animationField = null;
     static Method doAction = null;
+
     @SneakyThrows
     public static int getAnimation(NPC npc) {
-        Field animation = npc.getClass().getSuperclass().getDeclaredField("ck");
+        if (npc == null) {
+            return -1;
+        }
+        if (animationField == null) {
+            for (Field declaredField : npc.getClass().getSuperclass().getDeclaredFields()) {
+                if (declaredField == null) {
+                    continue;
+                }
+                declaredField.setAccessible(true);
+                if (declaredField.getType() != int.class) {
+                    continue;
+                }
+                if (Modifier.isFinal(declaredField.getModifiers())) {
+                    continue;
+                }
+                if (Modifier.isStatic(declaredField.getModifiers())) {
+                    continue;
+                }
+                int value = declaredField.getInt(npc);
+                declaredField.setInt(npc, 4795789);
+                if (npc.getAnimation() == 1049413981 * 4795789) {
+                    animationField = declaredField.getName();
+                    declaredField.setInt(npc, value);
+                    declaredField.setAccessible(false);
+                    break;
+                }
+                declaredField.setInt(npc, value);
+                declaredField.setAccessible(false);
+            }
+        }
+        if (animationField == null) {
+            return -1;
+        }
+        Field animation = npc.getClass().getSuperclass().getDeclaredField(animationField);
         animation.setAccessible(true);
-        int anim = animation.getInt(npc) * -1553687919;
+        int anim = animation.getInt(npc) * 1049413981;
         animation.setAccessible(false);
         return anim;
     }
@@ -98,6 +137,10 @@ public class Rs2Reflection {
 
         doAction.setAccessible(true);
         Microbot.getClientThread().runOnClientThread(() -> doAction.invoke(null, param0, param1, opcode, identifier, itemId, option, target, x, y));
+        if (Microbot.getClient().getKeyboardIdleTicks() > Random.random(5000, 10000)) {
+            Rs2Keyboard.keyPress(KeyEvent.VK_BACK_SPACE);
+        }
+        System.out.println("[INVOKE] => param0: " + param0 + " param1: " + param1 + " opcode: " + opcode + " id: " + identifier + " itemid: " + itemId);
         doAction.setAccessible(false);
     }
 }

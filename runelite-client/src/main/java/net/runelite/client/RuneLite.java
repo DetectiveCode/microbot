@@ -162,6 +162,7 @@ public class RuneLite {
         Locale.setDefault(Locale.ENGLISH);
 
         final OptionParser parser = new OptionParser(false);
+        parser.accepts("clean-jagex-launcher", "Enable jagex launcher"); // will remove the credentials.properties file in .runelite folder
         parser.accepts("developer-mode", "Enable developer tools");
         parser.accepts("debug", "Show extra debugging output");
         parser.accepts("microbot-debug", "Enables debug features for microbot");
@@ -200,13 +201,26 @@ public class RuneLite {
         parser.accepts("help", "Show this text").forHelp();
         OptionSet options = parser.parse(args);
 
+        if (options.has("clean-jagex-launcher")) {
+            System.out.println("clean-jagex-launcher option is enabled. This will delete your credentials.properties file to allow logging in with a username/password");
+            System.out.println("You can disable this in your run configuration by removing -clean-jagex-launcher");
+            File myObj = new File(System.getProperty("user.home") + "/.runelite/credentials.properties");
+            if (myObj.delete()) {
+                System.out.println("Succesfully Deleted the file: " + myObj.getName());
+            } else {
+                System.out.println("Credentials.properties file was not found.");
+            }
+        }
+
         if (options.has("help")) {
             parser.printHelpOn(System.out);
             System.exit(0);
         }
 
+        final Logger logger = (Logger) LoggerFactory.getLogger(Logger.ROOT_LOGGER_NAME);
+        logger.setLevel(Level.INFO);
+
         if (options.has("debug")) {
-            final Logger logger = (Logger) LoggerFactory.getLogger(Logger.ROOT_LOGGER_NAME);
             logger.setLevel(Level.DEBUG);
         }
 
@@ -230,10 +244,10 @@ public class RuneLite {
 
             ClientUI.proxyMessage = (socksProxy ? "SOCKS" : "HTTP") + " Proxy with address " + options.valueOf(proxyInfo);
 
-            if (httpProxy && proxy.length > 2) {
+            if (httpProxy && proxy.length >= 2) {
                 System.setProperty("http.proxyHost", proxy[0]);
                 System.setProperty("http.proxyPort", proxy[1]);
-            } else if (socksProxy && proxy.length > 2) {
+            } else if (socksProxy && proxy.length >= 2) {
                 System.setProperty("socksProxyHost", proxy[0]);
                 System.setProperty("socksProxyPort", proxy[1]);
             }

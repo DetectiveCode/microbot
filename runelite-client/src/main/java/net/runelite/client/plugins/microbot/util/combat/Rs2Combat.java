@@ -1,11 +1,19 @@
 package net.runelite.client.plugins.microbot.util.combat;
 
+import net.runelite.api.MenuAction;
 import net.runelite.api.VarPlayer;
 import net.runelite.api.widgets.Widget;
 import net.runelite.api.widgets.WidgetInfo;
 import net.runelite.client.plugins.microbot.Microbot;
 import net.runelite.client.plugins.microbot.util.Global;
+import net.runelite.client.plugins.microbot.globval.enums.InterfaceTab;
+import net.runelite.client.plugins.microbot.util.menu.NewMenuEntry;
+import net.runelite.client.plugins.microbot.util.tabs.Rs2Tab;
 import net.runelite.client.plugins.microbot.util.widget.Rs2Widget;
+
+import java.awt.*;
+
+import static net.runelite.client.plugins.microbot.util.Global.sleepUntil;
 
 public class Rs2Combat {
     /**
@@ -46,13 +54,13 @@ public class Rs2Combat {
      * @return boolean, whether the action succeeded
      */
     public static boolean setSpecState(boolean state, int specialAttackEnergyRequired) {
-        Widget widget = Microbot.getClient().getWidget(WidgetInfo.MINIMAP_SPEC_ORB);
         int currentSpecEnergy = Microbot.getClient().getVarpValue(VarPlayer.SPECIAL_ATTACK_PERCENT);
-        if (widget == null) return false;
+        if (Rs2Widget.isHidden(10485795)) return false;
         if (currentSpecEnergy < specialAttackEnergyRequired) return false;
         if (state == getSpecState()) return true;
 
-        Microbot.getMouse().click(widget.getBounds());
+        Microbot.doInvoke(new NewMenuEntry(-1, 10485795, MenuAction.CC_OP.getId(), 1, -1, "Special Attack"), new Rectangle(1, 1, Microbot.getClient().getCanvasWidth(), Microbot.getClient().getCanvasHeight()));
+        //Rs2Reflection.invokeMenu(-1, 10485795, MenuAction.CC_OP.getId(), 1, -1, "Use", "Special Attack", -1, -1);
         return true;
     }
 
@@ -85,5 +93,18 @@ public class Rs2Combat {
         return Rs2Widget.getChildWidgetSpriteID(widgetId, 0) == 1150;
     }
 
+    public static boolean enableAutoRetialiate() {
+        if (Microbot.getVarbitPlayerValue(172) == 1) {
+            Rs2Tab.switchToCombatOptionsTab();
+            sleepUntil(() -> Rs2Tab.getCurrentTab() == InterfaceTab.COMBAT, 2000);
+            Rs2Widget.clickWidget(38862878);
+        }
+
+        return Microbot.getVarbitPlayerValue(172) == 0;
+    }
+
+    public static boolean inCombat() {
+        return Microbot.getClient().getLocalPlayer().isInteracting()  || Microbot.getClient().getLocalPlayer().getAnimation() != -1;
+    }
 
 }

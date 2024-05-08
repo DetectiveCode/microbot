@@ -1,6 +1,5 @@
 package net.runelite.client.plugins.microbot.util;
 
-import net.runelite.api.coords.LocalPoint;
 import net.runelite.client.plugins.microbot.Microbot;
 import net.runelite.client.plugins.microbot.util.math.Random;
 
@@ -13,6 +12,7 @@ import java.util.function.BooleanSupplier;
 public class Global {
     static ScheduledExecutorService scheduledExecutorService = Executors.newScheduledThreadPool(10);
     static ScheduledFuture<?> scheduledFuture;
+
     public static ScheduledFuture<?> awaitExecutionUntil(Runnable callback, BooleanSupplier awaitedCondition, int time) {
         scheduledFuture = scheduledExecutorService.scheduleWithFixedDelay(() -> {
             if (awaitedCondition.getAsBoolean()) {
@@ -33,30 +33,28 @@ public class Global {
     }
 
     public static void sleep(int start, int end) {
-        if (!Microbot.getClient().isClientThread()) {
-            long startTime = System.currentTimeMillis();
-            do {
-            } while (System.currentTimeMillis() - startTime < Random.random(start, end));
-        }
+        if (Microbot.getClient().isClientThread()) return;
+        long startTime = System.currentTimeMillis();
+        do {
+        } while (System.currentTimeMillis() - startTime < Random.random(start, end));
     }
 
     public static void sleepUntil(BooleanSupplier awaitedCondition) {
-        boolean done;
-        long startTime = System.currentTimeMillis();
-        do {
-            done = awaitedCondition.getAsBoolean();
-        } while (!done && System.currentTimeMillis() - startTime < 5000);
+      sleepUntil(awaitedCondition, 5000);
     }
 
     public static void sleepUntil(BooleanSupplier awaitedCondition, int time) {
+        if (Microbot.getClient().isClientThread()) return;
         boolean done;
         long startTime = System.currentTimeMillis();
         do {
             done = awaitedCondition.getAsBoolean();
+            sleep(100);
         } while (!done && System.currentTimeMillis() - startTime < time);
     }
 
     public static boolean sleepUntilTrue(BooleanSupplier awaitedCondition, int time, int timeout) {
+        if (Microbot.getClient().isClientThread()) return false;
         long startTime = System.currentTimeMillis();
         do {
             if (awaitedCondition.getAsBoolean()) {
@@ -72,6 +70,7 @@ public class Global {
     }
 
     public static void sleepUntilOnClientThread(BooleanSupplier awaitedCondition, int time) {
+        if (Microbot.getClient().isClientThread()) return;
         boolean done;
         long startTime = System.currentTimeMillis();
         do {

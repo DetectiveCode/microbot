@@ -5,8 +5,8 @@ import net.runelite.client.plugins.microbot.Microbot;
 import net.runelite.client.plugins.microbot.Script;
 import net.runelite.client.plugins.microbot.crafting.CraftingConfig;
 import net.runelite.client.plugins.microbot.util.bank.Rs2Bank;
-import net.runelite.client.plugins.microbot.util.inventory.Inventory;
-import net.runelite.client.plugins.microbot.util.keyboard.VirtualKeyboard;
+import net.runelite.client.plugins.microbot.util.inventory.Rs2Inventory;
+import net.runelite.client.plugins.microbot.util.keyboard.Rs2Keyboard;
 
 import java.awt.event.KeyEvent;
 import java.util.concurrent.TimeUnit;
@@ -19,6 +19,7 @@ public class GemsScript extends Script {
     public boolean run(CraftingConfig config) {
         mainScheduledFuture = scheduledExecutorService.scheduleWithFixedDelay(() -> {
             if (!super.run()) return;
+            if (!Microbot.isLoggedIn()) return;
             try {
                 if (!Microbot.hasLevel(config.gemType().getLevelRequired(), Skill.CRAFTING)) {
                     Microbot.showMessage("Crafting level to low to craft " + config.gemType().getName());
@@ -26,7 +27,7 @@ public class GemsScript extends Script {
                     return;
                 }
                 final String uncutGemName = "uncut " + config.gemType().getName();
-                if (!Inventory.hasItem("uncut " + config.gemType().getName()) || !Inventory.hasItem("chisel")) {
+                if (!Rs2Inventory.hasItem("uncut " + config.gemType().getName()) || !Rs2Inventory.hasItem("chisel")) {
                     Rs2Bank.openBank();
                     if (Rs2Bank.isOpen()) {
                         Rs2Bank.depositAll("crushed gem");
@@ -42,12 +43,12 @@ public class GemsScript extends Script {
                         sleepUntil(() -> !Rs2Bank.isOpen());
                     }
                 } else {
-                    Inventory.useItem("chisel");
-                    Inventory.useItem(uncutGemName);
+                    Rs2Inventory.use("chisel");
+                    Rs2Inventory.use(uncutGemName);
                     sleep(600);
-                    VirtualKeyboard.keyPress(KeyEvent.VK_SPACE);
+                    Rs2Keyboard.keyPress(KeyEvent.VK_SPACE);
                     sleep(4000);
-                    sleepUntil(() -> !Microbot.isGainingExp || !Inventory.hasItem(uncutGemName), 30000);
+                    sleepUntil(() -> !Microbot.isGainingExp || !Rs2Inventory.hasItem(uncutGemName), 30000);
                 }
 
             } catch (Exception ex) {

@@ -1,14 +1,15 @@
 package net.runelite.client.plugins.microbot;
 
-import net.runelite.api.TileObject;
-import net.runelite.api.WallObject;
+import lombok.Getter;
+import net.runelite.api.coords.WorldPoint;
 import net.runelite.api.events.WidgetLoaded;
+import net.runelite.api.widgets.InterfaceID;
 import net.runelite.api.widgets.Widget;
-import net.runelite.client.plugins.microbot.util.globval.enums.InterfaceTab;
-import net.runelite.client.plugins.microbot.util.inventory.Inventory;
-import net.runelite.client.plugins.microbot.util.keyboard.VirtualKeyboard;
+import net.runelite.client.plugins.microbot.shortestpath.ShortestPathPlugin;
+import net.runelite.client.plugins.microbot.globval.enums.InterfaceTab;
+import net.runelite.client.plugins.microbot.util.inventory.Rs2Inventory;
+import net.runelite.client.plugins.microbot.util.keyboard.Rs2Keyboard;
 import net.runelite.client.plugins.microbot.util.math.Random;
-import net.runelite.client.plugins.microbot.util.menu.Rs2Menu;
 import net.runelite.client.plugins.microbot.util.player.Rs2Player;
 import net.runelite.client.plugins.microbot.util.tabs.Rs2Tab;
 import net.runelite.client.plugins.microbot.util.widget.Rs2Widget;
@@ -20,7 +21,6 @@ import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.function.BooleanSupplier;
 
-import static net.runelite.api.widgets.WidgetID.LEVEL_UP_GROUP_ID;
 
 public abstract class Script implements IScript {
 
@@ -34,6 +34,9 @@ public abstract class Script implements IScript {
         return mainScheduledFuture != null && !mainScheduledFuture.isDone();
     }
 
+    @Getter
+    protected static WorldPoint initialPlayerLocation;
+
     public void sleep(int time) {
         long startTime = System.currentTimeMillis();
         do {
@@ -43,9 +46,10 @@ public abstract class Script implements IScript {
 
     public void sleep(int start, int end) {
         long startTime = System.currentTimeMillis();
+        int randTime = Random.random(start, end);
         do {
             Microbot.status = "[Sleeping] between " + start + " ms and " + end + " ms";
-        } while (System.currentTimeMillis() - startTime < Random.random(start, end));
+        } while (System.currentTimeMillis() - startTime < randTime);
     }
 
     public ScheduledFuture<?> keepExecuteUntil(Runnable callback, BooleanSupplier awaitedCondition, int time) {
@@ -60,16 +64,17 @@ public abstract class Script implements IScript {
         return scheduledFuture;
     }
 
-    public void sleepUntil(BooleanSupplier awaitedCondition) {
-        sleepUntil(awaitedCondition, 5000);
+    public boolean sleepUntil(BooleanSupplier awaitedCondition) {
+        return sleepUntil(awaitedCondition, 5000);
     }
 
-    public void sleepUntil(BooleanSupplier awaitedCondition, int time) {
+    public boolean sleepUntil(BooleanSupplier awaitedCondition, int time) {
         boolean done;
         long startTime = System.currentTimeMillis();
         do {
             done = awaitedCondition.getAsBoolean();
         } while (!done && System.currentTimeMillis() - startTime < time);
+        return done;
     }
 
     public void sleepUntilOnClientThread(BooleanSupplier awaitedCondition) {
@@ -88,9 +93,12 @@ public abstract class Script implements IScript {
 
     public void shutdown() {
         if (mainScheduledFuture != null && !mainScheduledFuture.isDone()) {
-            Microbot.getNotifier().notify("Shutdown script");
-            Rs2Menu.setOption("");
             mainScheduledFuture.cancel(true);
+            Microbot.pauseAllScripts = false;
+            ShortestPathPlugin.exit();
+            if (Microbot.getClientThread().scheduledFuture != null)
+                Microbot.getClientThread().scheduledFuture.cancel(true);
+            initialPlayerLocation = null;
         }
     }
 
@@ -98,52 +106,37 @@ public abstract class Script implements IScript {
         hasLeveledUp = false;
         if (Microbot.enableAutoRunOn)
             Rs2Player.toggleRunEnergy(true);
-        if (Microbot.getClient().getMinimapZoom() > 2)
-            Microbot.getClient().setMinimapZoom(2);
 
         if (Rs2Widget.getWidget(15269889) != null) { //levelup congratulations interface
-            VirtualKeyboard.keyPress(KeyEvent.VK_SPACE);
+            Rs2Keyboard.keyPress(KeyEvent.VK_SPACE);
         }
         Widget clickHereToPlayButton = Rs2Widget.getWidget(24772680); //on login screen
-        if (clickHereToPlayButton != null && !Microbot.getClientThread().runOnClientThread(() -> clickHereToPlayButton.isHidden())) {
+        if (clickHereToPlayButton != null && !Microbot.getClientThread().runOnClientThread(clickHereToPlayButton::isHidden)) {
             Rs2Widget.clickWidget(clickHereToPlayButton.getId());
         }
 
         if (Microbot.pauseAllScripts)
             return false;
 
-        if (Microbot.getWalker() != null && Microbot.getWalker().getPathfinder() != null && !Microbot.getWalker().getPathfinder().isDone())
-            return false;
-
         boolean hasRunEnergy = Microbot.getClient().getEnergy() > 4000;
 
         if (!hasRunEnergy && useStaminaPotsIfNeeded) {
-            Inventory.useItemContains("Stamina potion");
+            Rs2Inventory.interact("Stamina potion", "drink");
+        }
+
+        if (Microbot.isLoggedIn()) {
+            if (initialPlayerLocation == null)
+                initialPlayerLocation = Microbot.getClient().getLocalPlayer().getWorldLocation();
         }
 
         return true;
     }
 
-    public IScript click(TileObject gameObject) {
-        if (gameObject != null)
-            Microbot.getMouse().click(gameObject.getClickbox().getBounds());
-        else
-            System.out.println("GameObject is null");
-        return this;
-    }
-
-    public IScript click(WallObject wall) {
-        if (wall != null)
-            Microbot.getMouse().click(wall.getClickbox().getBounds());
-        else
-            System.out.println("wall is null");
-        return this;
-    }
-
     public void keyPress(char c) {
-        VirtualKeyboard.keyPress(c);
+        Rs2Keyboard.keyPress(c);
     }
 
+    @Deprecated(since="Use Rs2Player.logout()", forRemoval = true)
     public void logout() {
         Rs2Tab.switchToLogout();
         sleepUntil(() -> Rs2Tab.getCurrentTab() == InterfaceTab.LOGOUT);
@@ -154,10 +147,8 @@ public abstract class Script implements IScript {
     public void onWidgetLoaded(WidgetLoaded event) {
         int groupId = event.getGroupId();
 
-        switch (groupId) {
-            case LEVEL_UP_GROUP_ID:
-                hasLeveledUp = true;
-                break;
+        if (groupId == InterfaceID.LEVEL_UP) {
+            hasLeveledUp = true;
         }
     }
 }

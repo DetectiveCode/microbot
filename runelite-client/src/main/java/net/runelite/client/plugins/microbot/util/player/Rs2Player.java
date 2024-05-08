@@ -1,14 +1,26 @@
 package net.runelite.client.plugins.microbot.util.player;
 
-import net.runelite.api.VarPlayer;
-import net.runelite.api.Varbits;
+import net.runelite.api.*;
+import net.runelite.api.coords.LocalPoint;
 import net.runelite.api.coords.WorldPoint;
 import net.runelite.api.events.VarbitChanged;
 import net.runelite.api.widgets.Widget;
 import net.runelite.api.widgets.WidgetInfo;
 import net.runelite.client.plugins.microbot.Microbot;
+import net.runelite.client.plugins.microbot.util.Global;
 import net.runelite.client.plugins.microbot.util.equipment.Rs2Equipment;
+import net.runelite.client.plugins.microbot.globval.VarbitValues;
+import net.runelite.client.plugins.microbot.util.inventory.Rs2Inventory;
+import net.runelite.client.plugins.microbot.util.inventory.Rs2Item;
+import net.runelite.client.plugins.microbot.util.menu.NewMenuEntry;
 import net.runelite.client.plugins.microbot.util.widget.Rs2Widget;
+
+import java.awt.*;
+import java.util.List;
+import java.util.stream.Collectors;
+
+import static net.runelite.api.MenuAction.CC_OP;
+import static net.runelite.client.plugins.microbot.util.Global.sleepUntil;
 
 
 public class Rs2Player {
@@ -34,12 +46,16 @@ public class Rs2Player {
         return divineRangedTime > 0 || hasDivineBastionActive();
     }
 
+    public static boolean hasRangingPotionActive() {
+        return Microbot.getClient().getBoostedSkillLevel(Skill.RANGED) - 5 > Microbot.getClient().getRealSkillLevel(Skill.RANGED);
+    }
+
     public static boolean hasDivineBastionActive() {
         return divineBastionTime > 0;
     }
 
     public static boolean hasAntiVenomActive() {
-        if (Rs2Equipment.hasEquipped("serpentine helm")) {
+        if (Rs2Equipment.isWearing("serpentine helm")) {
             return true;
         } else return antiVenomTime < VENOM_VALUE_CUTOFF;
     }
@@ -74,6 +90,26 @@ public class Rs2Player {
                 antiPoisonTime = poisonVarp;
             }
         }
+    }
+
+    public static void waitForWalking() {
+        sleepUntil(Rs2Player::isWalking);
+        sleepUntil(() -> !Rs2Player.isWalking());
+    }
+
+    public static void waitForWalking(int time) {
+        sleepUntil(Rs2Player::isWalking);
+        sleepUntil(() -> !Rs2Player.isWalking(), time);
+    }
+
+    public static void waitForAnimation() {
+        sleepUntil(Rs2Player::isAnimating);
+        sleepUntil(() -> !Rs2Player.isAnimating());
+    }
+
+    public static void waitForAnimation(int time) {
+        sleepUntil(Rs2Player::isAnimating, time);
+        sleepUntil(() -> !Rs2Player.isAnimating(), time);
     }
 
     public static boolean isAnimating() {
@@ -112,15 +148,67 @@ public class Rs2Player {
         if (widget == null) return false;
         if (Microbot.getClient().getEnergy() > 1000 && toggle) {
             Microbot.getMouse().click(widget.getCanvasLocation());
+            Global.sleep(150, 300);
             return true;
         } else if (!toggle) {
             Microbot.getMouse().click(widget.getCanvasLocation());
+            Global.sleep(150, 300);
             return true;
         }
         return false;
     }
 
+    public static void logout() {
+        if (Microbot.isLoggedIn())
+            Microbot.doInvoke(new NewMenuEntry(-1, 11927560, CC_OP.getId(), 1, -1, "Logout"), new Rectangle(1, 1, Microbot.getClient().getCanvasWidth(), Microbot.getClient().getCanvasHeight()));
+
+        //Rs2Reflection.invokeMenu(-1, 11927560, CC_OP.getId(), 1, -1, "Logout", "", -1, -1);
+    }
+
+    public static boolean eatAt(int percentage) {
+        double treshHold = (double) (Microbot.getClient().getBoostedSkillLevel(Skill.HITPOINTS) * 100) / Microbot.getClient().getRealSkillLevel(Skill.HITPOINTS);
+        int missingHitpoints = Microbot.getClient().getRealSkillLevel(Skill.HITPOINTS) - Microbot.getClient().getBoostedSkillLevel(Skill.HITPOINTS);
+        if (treshHold <= percentage) {
+            List<Rs2Item> foods = Rs2Inventory.getInventoryFood();
+            for (Rs2Item food : foods) {
+                if (missingHitpoints >= 40 && Rs2Inventory.get("Cooked karambwan") != null) {
+                    //double eat
+                    Rs2Inventory.interact(food, "eat");
+                    return Rs2Inventory.interact(Rs2Inventory.get("Cooked karambwan"), "eat");
+                } else {
+                    return Rs2Inventory.interact(food, "eat");
+                }
+            }
+        }
+        return false;
+    }
+
+    public static List<Player> getPlayers() {
+        return Microbot.getClientThread().runOnClientThread(() -> Microbot.getClient().getPlayers()
+                .stream()
+                .filter(x -> x != Microbot.getClient().getLocalPlayer())
+                .collect(Collectors.toList()));
+    }
+
     public static WorldPoint getWorldLocation() {
-        return Microbot.getClientThread().runOnClientThread(() -> Microbot.getClient().getLocalPlayer().getWorldLocation());
+        if (Microbot.getClient().isInInstancedRegion()) {
+            LocalPoint l = LocalPoint.fromWorld(Microbot.getClient(), Microbot.getClient().getLocalPlayer().getWorldLocation());
+            WorldPoint playerInstancedWorldLocation = WorldPoint.fromLocalInstance(Microbot.getClient(), l);
+            return playerInstancedWorldLocation;
+        } else {
+            return Microbot.getClient().getLocalPlayer().getWorldLocation();
+        }
+    }
+    public static LocalPoint getLocalLocation() {
+        return Microbot.getClient().getLocalPlayer().getLocalLocation();
+    }
+
+    public static boolean isFullHealth() {
+        return Microbot.getClient().getRealSkillLevel(Skill.HITPOINTS)
+                == Microbot.getClient().getBoostedSkillLevel(Skill.HITPOINTS);
+    }
+
+    public static boolean isInMulti() {
+        return Microbot.getVarbitValue(Varbits.MULTICOMBAT_AREA) == VarbitValues.INSIDE_MULTICOMBAT_ZONE.getValue();
     }
 }

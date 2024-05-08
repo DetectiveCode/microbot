@@ -23,7 +23,7 @@ public class QuestOverlay extends OverlayPanel {
         try {
             panelComponent.setPreferredSize(new Dimension(200, 300));
             panelComponent.getChildren().add(TitleComponent.builder()
-                    .text("Micro Example V" + QuestScript.version)
+                    .text("Micro Quester V" + QuestScript.version)
                     .color(Color.GREEN)
                     .build());
 
@@ -33,10 +33,6 @@ public class QuestOverlay extends OverlayPanel {
                     .left(Microbot.status)
                     .build());
 
-            for (Point point: Microbot.getMouse().mousePositions) {
-                graphics.setColor(Color.RED);
-                graphics.drawString("x", point.getX(), point.getY());
-            }
 
         } catch(Exception ex) {
             System.out.println(ex.getMessage());

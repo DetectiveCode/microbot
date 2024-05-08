@@ -26,34 +26,8 @@ package net.runelite.client.plugins.gpu;
 
 import com.google.common.primitives.Ints;
 import com.google.inject.Provides;
-import java.awt.Canvas;
-import java.awt.Dimension;
-import java.awt.GraphicsConfiguration;
-import java.awt.Image;
-import java.awt.geom.AffineTransform;
-import java.awt.image.BufferedImage;
-import java.awt.image.DataBufferInt;
-import java.nio.ByteBuffer;
-import java.nio.ByteOrder;
-import java.nio.FloatBuffer;
-import java.nio.IntBuffer;
-import java.nio.ShortBuffer;
-import javax.annotation.Nonnull;
-import javax.inject.Inject;
-import javax.swing.SwingUtilities;
 import lombok.extern.slf4j.Slf4j;
-import net.runelite.api.BufferProvider;
-import net.runelite.api.Client;
-import net.runelite.api.Constants;
-import net.runelite.api.GameState;
-import net.runelite.api.Model;
-import net.runelite.api.Perspective;
-import net.runelite.api.Renderable;
-import net.runelite.api.Scene;
-import net.runelite.api.SceneTileModel;
-import net.runelite.api.SceneTilePaint;
-import net.runelite.api.Texture;
-import net.runelite.api.TextureProvider;
+import net.runelite.api.*;
 import net.runelite.api.events.GameStateChanged;
 import net.runelite.api.hooks.DrawCallbacks;
 import net.runelite.client.callback.ClientThread;
@@ -67,6 +41,7 @@ import net.runelite.client.plugins.PluginManager;
 import net.runelite.client.plugins.gpu.config.AntiAliasingMode;
 import net.runelite.client.plugins.gpu.config.UIScalingMode;
 import net.runelite.client.plugins.gpu.template.Template;
+import net.runelite.client.plugins.microbot.Microbot;
 import net.runelite.client.ui.ClientUI;
 import net.runelite.client.ui.DrawManager;
 import net.runelite.client.util.OSType;
@@ -80,6 +55,15 @@ import org.lwjgl.opengl.GLCapabilities;
 import org.lwjgl.opengl.GLUtil;
 import org.lwjgl.system.Callback;
 import org.lwjgl.system.Configuration;
+
+import javax.annotation.Nonnull;
+import javax.inject.Inject;
+import javax.swing.*;
+import java.awt.*;
+import java.awt.geom.AffineTransform;
+import java.awt.image.BufferedImage;
+import java.awt.image.DataBufferInt;
+import java.nio.*;
 
 @PluginDescriptor(
 	name = "GPU",
@@ -815,14 +799,11 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 
 	private void initAAFbo(int width, int height, int aaSamples)
 	{
-		if (OSType.getOSType() != OSType.MacOS)
-		{
-			final GraphicsConfiguration graphicsConfiguration = clientUI.getGraphicsConfiguration();
-			final AffineTransform transform = graphicsConfiguration.getDefaultTransform();
+		final GraphicsConfiguration graphicsConfiguration = clientUI.getGraphicsConfiguration();
+		final AffineTransform transform = graphicsConfiguration.getDefaultTransform();
 
-			width = getScaledValue(transform.getScaleX(), width);
-			height = getScaledValue(transform.getScaleY(), height);
-		}
+		width = getScaledValue(transform.getScaleX(), width);
+		height = getScaledValue(transform.getScaleY(), height);
 
 		// Create and bind the FBO
 		fboSceneHandle = GL43C.glGenFramebuffers();
@@ -1273,7 +1254,7 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 			if (gameState == GameState.LOGGED_IN)
 			{
 				// avoid textures animating during loading
-				GL43C.glUniform1i(uniTick, client.getGameCycle());
+				GL43C.glUniform1i(uniTick, client.getGameCycle() & 127);
 			}
 
 			// Calculate projection matrix
@@ -1332,14 +1313,11 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 			int width = lastStretchedCanvasWidth;
 			int height = lastStretchedCanvasHeight;
 
-			if (OSType.getOSType() != OSType.MacOS)
-			{
-				final GraphicsConfiguration graphicsConfiguration = clientUI.getGraphicsConfiguration();
-				final AffineTransform transform = graphicsConfiguration.getDefaultTransform();
+			final GraphicsConfiguration graphicsConfiguration = clientUI.getGraphicsConfiguration();
+			final AffineTransform transform = graphicsConfiguration.getDefaultTransform();
 
-				width = getScaledValue(transform.getScaleX(), width);
-				height = getScaledValue(transform.getScaleY(), height);
-			}
+			width = getScaledValue(transform.getScaleX(), width);
+			height = getScaledValue(transform.getScaleY(), height);
 
 			GL43C.glBindFramebuffer(GL43C.GL_READ_FRAMEBUFFER, fboSceneHandle);
 			GL43C.glBindFramebuffer(GL43C.GL_DRAW_FRAMEBUFFER, awtContext.getFramebuffer(false));
@@ -1369,6 +1347,9 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 		}
 		catch (RuntimeException ex)
 		{
+			// Notice that for some machines the GPU plugin might crash after long session
+			// Pause all scripts if this happens to avoid getting stuck
+			Microbot.pauseAllScripts = true;
 			// this is always fatal
 			if (!canvas.isValid())
 			{
@@ -1421,13 +1402,10 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 		// Set the sampling function used when stretching the UI.
 		// This is probably better done with sampler objects instead of texture parameters, but this is easier and likely more portable.
 		// See https://www.khronos.org/opengl/wiki/Sampler_Object for details.
-		if (client.isStretchedEnabled())
-		{
-			// GL_NEAREST makes sampling for bicubic/xBR simpler, so it should be used whenever linear isn't
-			final int function = uiScalingMode == UIScalingMode.LINEAR ? GL43C.GL_LINEAR : GL43C.GL_NEAREST;
-			GL43C.glTexParameteri(GL43C.GL_TEXTURE_2D, GL43C.GL_TEXTURE_MIN_FILTER, function);
-			GL43C.glTexParameteri(GL43C.GL_TEXTURE_2D, GL43C.GL_TEXTURE_MAG_FILTER, function);
-		}
+		// GL_NEAREST makes sampling for bicubic/xBR simpler, so it should be used whenever linear isn't
+		final int function = uiScalingMode == UIScalingMode.LINEAR ? GL43C.GL_LINEAR : GL43C.GL_NEAREST;
+		GL43C.glTexParameteri(GL43C.GL_TEXTURE_2D, GL43C.GL_TEXTURE_MIN_FILTER, function);
+		GL43C.glTexParameteri(GL43C.GL_TEXTURE_2D, GL43C.GL_TEXTURE_MAG_FILTER, function);
 
 		// Texture on UI
 		GL43C.glBindVertexArray(vaoUiHandle);
@@ -1458,13 +1436,10 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 			height = dim.height;
 		}
 
-		if (OSType.getOSType() != OSType.MacOS)
-		{
-			final GraphicsConfiguration graphicsConfiguration = clientUI.getGraphicsConfiguration();
-			final AffineTransform t = graphicsConfiguration.getDefaultTransform();
-			width = getScaledValue(t.getScaleX(), width);
-			height = getScaledValue(t.getScaleY(), height);
-		}
+		final GraphicsConfiguration graphicsConfiguration = clientUI.getGraphicsConfiguration();
+		final AffineTransform t = graphicsConfiguration.getDefaultTransform();
+		width = getScaledValue(t.getScaleX(), width);
+		height = getScaledValue(t.getScaleY(), height);
 
 		ByteBuffer buffer = ByteBuffer.allocateDirect(width * height * 4)
 			.order(ByteOrder.nativeOrder());
@@ -1852,21 +1827,13 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 
 	private void glDpiAwareViewport(final int x, final int y, final int width, final int height)
 	{
-		if (OSType.getOSType() == OSType.MacOS)
-		{
-			// macos handles DPI scaling for us already
-			GL43C.glViewport(x, y, width, height);
-		}
-		else
-		{
-			final GraphicsConfiguration graphicsConfiguration = clientUI.getGraphicsConfiguration();
-			final AffineTransform t = graphicsConfiguration.getDefaultTransform();
-			GL43C.glViewport(
-				getScaledValue(t.getScaleX(), x),
-				getScaledValue(t.getScaleY(), y),
-				getScaledValue(t.getScaleX(), width),
-				getScaledValue(t.getScaleY(), height));
-		}
+		final GraphicsConfiguration graphicsConfiguration = clientUI.getGraphicsConfiguration();
+		final AffineTransform t = graphicsConfiguration.getDefaultTransform();
+		GL43C.glViewport(
+			getScaledValue(t.getScaleX(), x),
+			getScaledValue(t.getScaleY(), y),
+			getScaledValue(t.getScaleX(), width),
+			getScaledValue(t.getScaleY(), height));
 	}
 
 	private int getDrawDistance()

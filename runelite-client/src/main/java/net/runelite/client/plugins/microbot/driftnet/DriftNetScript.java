@@ -7,8 +7,8 @@ import net.runelite.client.plugins.microbot.Microbot;
 import net.runelite.client.plugins.microbot.Script;
 import net.runelite.client.plugins.microbot.util.bank.Rs2Bank;
 import net.runelite.client.plugins.microbot.util.gameobject.Rs2GameObject;
-import net.runelite.client.plugins.microbot.util.inventory.Inventory;
-import net.runelite.client.plugins.microbot.util.keyboard.VirtualKeyboard;
+import net.runelite.client.plugins.microbot.util.inventory.Rs2Inventory;
+import net.runelite.client.plugins.microbot.util.keyboard.Rs2Keyboard;
 import net.runelite.client.plugins.microbot.util.npc.Rs2Npc;
 import net.runelite.client.plugins.microbot.util.widget.Rs2Widget;
 
@@ -27,12 +27,12 @@ public class DriftNetScript extends Script {
             if (!super.run()) return;
             try {
 
-                if (!Inventory.hasItem(ItemID.DRIFT_NET)) {
+                if (!Rs2Inventory.hasItem(ItemID.DRIFT_NET)) {
                     Rs2GameObject.interact(ObjectID.ANNETTE, "Nets");
                     sleepUntil(() -> Rs2Widget.getWidget(20250629) != null);
                     Rs2Bank.withdrawAll(ItemID.DRIFT_NET);
                     sleep(1000);
-                    VirtualKeyboard.keyPress(KeyEvent.VK_ESCAPE);
+                    Rs2Keyboard.keyPress(KeyEvent.VK_ESCAPE);
                     return;
                 }
 

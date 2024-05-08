@@ -5,8 +5,9 @@ import net.runelite.api.coords.WorldPoint;
 import net.runelite.client.plugins.microbot.Microbot;
 import net.runelite.client.plugins.microbot.Script;
 import net.runelite.client.plugins.microbot.util.gameobject.Rs2GameObject;
-import net.runelite.client.plugins.microbot.util.inventory.Inventory;
+import net.runelite.client.plugins.microbot.util.inventory.Rs2Inventory;
 import net.runelite.client.plugins.microbot.util.npc.Rs2Npc;
+import net.runelite.client.plugins.microbot.util.walker.Rs2Walker;
 
 import java.util.concurrent.TimeUnit;
 
@@ -14,25 +15,26 @@ public class ClueScript extends Script {
 
     public static double version = 1.1;
 
-    WorldPoint ClueAreaGloves = new WorldPoint(2579,3378,0);
-    WorldPoint ClueAreaCloak = new WorldPoint(2614,3064,0);
-    WorldPoint ClueAreaHelm = new WorldPoint(2590,3231,0);
-    WorldPoint ClueAreaGarb = new WorldPoint(1595,3628,0);
-    WorldPoint PortSarim = new WorldPoint(3055,3245,0);
-    WorldPoint KourendBoat = new WorldPoint(1824,3695,1);
+    WorldPoint ClueAreaGloves = new WorldPoint(2579, 3378, 0);
+    WorldPoint ClueAreaCloak = new WorldPoint(2614, 3064, 0);
+    WorldPoint ClueAreaHelm = new WorldPoint(2590, 3231, 0);
+    WorldPoint ClueAreaGarb = new WorldPoint(1595, 3628, 0);
+    WorldPoint PortSarim = new WorldPoint(3055, 3245, 0);
+    WorldPoint KourendBoat = new WorldPoint(1824, 3695, 1);
     WorldArea Kourend = new WorldArea(1385, 3398, 465, 417, 0);
+
     private State getState() {
-        if (!Inventory.contains("Spade") && !Inventory.contains("Nature rune") && !Inventory.contains("leather boots") && !Inventory.contains("Superantipoison (1)"))
+        if (!Rs2Inventory.contains("Spade") && !Rs2Inventory.contains("Nature rune") && !Rs2Inventory.contains("leather boots") && !Rs2Inventory.contains("Superantipoison (1)"))
             return State.ERROR;
-        if (!Inventory.contains("Clue hunter gloves") && !Inventory.contains("Clue hunter boots"))
+        if (!Rs2Inventory.contains("Clue hunter gloves") && !Rs2Inventory.contains("Clue hunter boots"))
             return State.CLUE1;
-        if (!Inventory.contains("Clue hunter cloak"))
+        if (!Rs2Inventory.contains("Clue hunter cloak"))
             return State.CLUE2;
-        if (!Inventory.contains("Helm of raedwald"))
+        if (!Rs2Inventory.contains("Helm of raedwald"))
             return State.CLUE3;
-        if (!Inventory.contains("Clue hunter garb") && !Kourend.contains(Microbot.getClient().getLocalPlayer().getWorldLocation()))
+        if (!Rs2Inventory.contains("Clue hunter garb") && !Kourend.contains(Microbot.getClient().getLocalPlayer().getWorldLocation()))
             return State.CLUE4;
-        if (!Inventory.contains("Clue hunter garb") && Kourend.contains(Microbot.getClient().getLocalPlayer().getWorldLocation()))
+        if (!Rs2Inventory.contains("Clue hunter garb") && Kourend.contains(Microbot.getClient().getLocalPlayer().getWorldLocation()))
             return State.CLUE5;
         return State.DONE;
     }
@@ -50,34 +52,34 @@ public class ClueScript extends Script {
                     case CLUE1:
                         Microbot.status = "collecting Gloves and boots";
                         if (Microbot.getClient().getLocalPlayer().getWorldLocation().equals(ClueAreaGloves)) {
-                            Inventory.useItemAction("Spade","Dig");
+                            Rs2Inventory.interact("Spade", "Dig");
                             sleep(1000, 2000);
                         } else {
-                            Microbot.getWalker().hybridWalkTo(ClueAreaGloves);
+                            Rs2Walker.walkTo(ClueAreaGloves);
                         }
                         break;
                     case CLUE2:
                         Microbot.status = "collecting cloak";
                         if (Microbot.getClient().getLocalPlayer().getWorldLocation().equals(ClueAreaCloak)) {
-                            Inventory.useItemAction("Spade","Dig");
+                            Rs2Inventory.interact("Spade", "Dig");
                             sleep(1000, 2000);
                         } else {
-                            Microbot.getWalker().hybridWalkTo(ClueAreaCloak);
+                            Rs2Walker.walkTo(ClueAreaCloak);
                         }
                         break;
                     case CLUE3:
                         Microbot.status = "collecting Helm";
                         if (Microbot.getClient().getLocalPlayer().getWorldLocation().equals(ClueAreaHelm)) {
-                            Inventory.useItemAction("Spade","Dig");
+                            Rs2Inventory.interact("Spade", "Dig");
                             sleep(1000, 2000);
                         } else {
-                            Microbot.getWalker().hybridWalkTo(ClueAreaHelm);
+                            Rs2Walker.walkTo(ClueAreaHelm);
                         }
                         break;
                     case CLUE4:
                         if (Microbot.getClient().getLocalPlayer().getWorldLocation().equals(KourendBoat)) {
                             Microbot.status = "Crossing to Kourend";
-                            Rs2GameObject.interact(27778,"Cross");
+                            Rs2GameObject.interact(27778, "Cross");
                             sleep(2500, 3500);
                         } else {
                             Microbot.status = "Walking to Port Sarim";
@@ -85,17 +87,17 @@ public class ClueScript extends Script {
                                 Rs2Npc.interact("Veos", "Port Piscarilius");
                                 sleep(4000, 5000);
                             } else {
-                                Microbot.getWalker().hybridWalkTo(PortSarim);
+                                Rs2Walker.walkTo(PortSarim);
                             }
                         }
                         break;
                     case CLUE5:
                         Microbot.status = "collecting garb";
                         if (Microbot.getClient().getLocalPlayer().getWorldLocation().equals(ClueAreaGarb)) {
-                            Inventory.useItemAction("Spade","Dig");
+                            Rs2Inventory.interact("Spade", "Dig");
                             sleep(1000, 2000);
                         } else {
-                            Microbot.getWalker().hybridWalkTo(ClueAreaGarb);
+                            Rs2Walker.walkTo(ClueAreaGarb);
                         }
                         break;
                     case DONE:

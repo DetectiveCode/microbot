@@ -29,7 +29,7 @@
 	<parent>
 		<groupId>net.runelite</groupId>
 		<artifactId>runelite-parent</artifactId>
-		<version>1.10.23-SNAPSHOT</version>
+		<version>1.10.28-SNAPSHOT</version>
 	</parent>
 
 	<artifactId>client</artifactId>
@@ -41,14 +41,13 @@
 		<git.commit.id.abbrev>nogit</git.commit.id.abbrev>
 		<git.dirty>false</git.dirty>
 		<shade.skip>false</shade.skip>
-		<kotlin.version>1.9.0</kotlin.version>
 	</properties>
 
 	<dependencies>
 		<dependency>
-			<groupId>org.jetbrains.kotlinx</groupId>
-			<artifactId>kotlinx-coroutines-core</artifactId>
-			<version>1.5.0</version>
+			<groupId>com.microsoft.signalr</groupId>
+			<artifactId>signalr</artifactId>
+			<version>7.0.4</version>
 		</dependency>
 		<dependency>
 			<groupId>com.fasterxml.jackson.core</groupId>
@@ -161,7 +160,7 @@
 		<dependency>
 			<groupId>net.runelite</groupId>
 			<artifactId>rlawt</artifactId>
-			<version>1.4</version>
+			<version>1.5</version>
 		</dependency>
 
 		<!-- lwjgl core -->
@@ -328,17 +327,6 @@
 			<version>2.13.5</version>
 			<scope>compile</scope>
 		</dependency>
-		<dependency>
-			<groupId>org.jetbrains.kotlin</groupId>
-			<artifactId>kotlin-stdlib-jdk8</artifactId>
-			<version>${kotlin.version}</version>
-		</dependency>
-		<dependency>
-			<groupId>org.jetbrains.kotlin</groupId>
-			<artifactId>kotlin-test</artifactId>
-			<version>${kotlin.version}</version>
-			<scope>test</scope>
-		</dependency>
 	</dependencies>
 
 	<dependencyManagement>
@@ -390,6 +378,7 @@
 						<nonFilteredFileExtension>png</nonFilteredFileExtension>
 						<nonFilteredFileExtension>gif</nonFilteredFileExtension>
 						<nonFilteredFileExtension>wav</nonFilteredFileExtension>
+						<nonFilteredFileExtension>zip</nonFilteredFileExtension>
 					</nonFilteredFileExtensions>
 				</configuration>
 			</plugin>
@@ -414,6 +403,16 @@
 									<mainClass>net.runelite.client.RuneLite</mainClass>
 								</transformer>
 							</transformers>
+							<filters>
+								<filter>
+									<artifact>*:*</artifact>
+									<excludes>
+										<exclude>META-INF/*.SF</exclude>
+										<exclude>META-INF/*.DSA</exclude>
+										<exclude>META-INF/*.RSA</exclude>
+									</excludes>
+								</filter>
+							</filters>
 						</configuration>
 					</execution>
 				</executions>
@@ -536,30 +535,6 @@
 						</configuration>
 					</execution>
 				</executions>
-			</plugin>
-			<plugin>
-				<groupId>org.jetbrains.kotlin</groupId>
-				<artifactId>kotlin-maven-plugin</artifactId>
-				<version>${kotlin.version}</version>
-				<executions>
-					<execution>
-						<id>compile</id>
-						<phase>compile</phase>
-						<goals>
-							<goal>compile</goal>
-						</goals>
-					</execution>
-					<execution>
-						<id>test-compile</id>
-						<phase>test-compile</phase>
-						<goals>
-							<goal>test-compile</goal>
-						</goals>
-					</execution>
-				</executions>
-				<configuration>
-					<jvmTarget>1.8</jvmTarget>
-				</configuration>
 			</plugin>
 			<plugin>
 				<groupId>org.apache.maven.plugins</groupId>

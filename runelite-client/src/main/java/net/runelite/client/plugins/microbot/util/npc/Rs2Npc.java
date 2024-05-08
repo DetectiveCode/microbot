@@ -1,25 +1,28 @@
 package net.runelite.client.plugins.microbot.util.npc;
 
 import net.runelite.api.*;
+import net.runelite.api.coords.LocalPoint;
+import net.runelite.api.coords.WorldArea;
+import net.runelite.api.coords.WorldPoint;
 import net.runelite.client.plugins.microbot.Microbot;
 import net.runelite.client.plugins.microbot.util.camera.Rs2Camera;
-import net.runelite.client.plugins.microbot.util.math.Calculations;
+import net.runelite.client.plugins.microbot.util.combat.Rs2Combat;
 import net.runelite.client.plugins.microbot.util.math.Random;
+import net.runelite.client.plugins.microbot.util.menu.NewMenuEntry;
+import net.runelite.client.plugins.microbot.util.player.Rs2Player;
+import net.runelite.client.plugins.microbot.util.walker.Rs2Walker;
+import org.jetbrains.annotations.Nullable;
 
+import java.awt.*;
 import java.util.Arrays;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Optional;
 import java.util.stream.Collectors;
-
-import static net.runelite.client.plugins.microbot.util.Global.sleep;
+import java.util.stream.Stream;
 
 
 public class Rs2Npc {
-
-    public static NPC npcInteraction = null;
-    public static String npcAction = null;
-
 
     public static NPC getNpcByIndex(int index) {
         return Microbot.getClient().getNpcs().stream()
@@ -29,8 +32,8 @@ public class Rs2Npc {
     }
 
     public static NPC validateInteractable(NPC npc) {
-        if(npc != null) {
-            Microbot.getWalker().walkTo(npc.getWorldLocation());
+        if (npc != null) {
+            Rs2Walker.walkTo(npc.getWorldLocation());
             Rs2Camera.turnTo(npc);
             return npc;
         }
@@ -38,8 +41,18 @@ public class Rs2Npc {
     }
 
     public static List<NPC> getNpcsForPlayer() {
-        List<NPC> npcs = Microbot.getClient().getNpcs().stream()
+        return Microbot.getClient().getNpcs().stream()
                 .filter(x -> x.getInteracting() == Microbot.getClient().getLocalPlayer())
+                .sorted(Comparator
+                        .comparingInt(value -> value
+                                .getLocalLocation()
+                                .distanceTo(Microbot.getClient().getLocalPlayer().getLocalLocation())))
+                .collect(Collectors.toList());
+    }
+
+    public static List<NPC> getNpcsForPlayer(String name) {
+        List<NPC> npcs = Microbot.getClient().getNpcs().stream()
+                .filter(x -> x.getInteracting() == Microbot.getClient().getLocalPlayer() && x.getName().equalsIgnoreCase(name))
                 .sorted(Comparator
                         .comparingInt(value -> value
                                 .getLocalLocation()
@@ -98,35 +111,61 @@ public class Rs2Npc {
         return health;
     }
 
-    public static NPC[] getNpcs() {
-        List<NPC> npcs = Microbot.getClient().getNpcs().stream()
-                .sorted(Comparator.comparingInt(value -> value.getLocalLocation().distanceTo(Microbot.getClient().getLocalPlayer().getLocalLocation())))
-                .collect(Collectors.toList());
+    /**
+     * @return
+     */
+    public static Stream<NPC> getNpcs() {
+        Stream<NPC> npcs = Microbot.getClientThread().runOnClientThread(() -> Microbot.getClient().getNpcs().stream()
+                .filter(x -> x != null && x.getName() != null && !x.isDead())
+                .sorted(Comparator.comparingInt(value -> value.getLocalLocation()
+                        .distanceTo(Microbot.getClient().getLocalPlayer().getLocalLocation()))));
 
-        return npcs.toArray(new NPC[npcs.size()]);
+        return npcs;
     }
 
-    public static NPC[] getAttackableNpcs() {
-        List<NPC> npcs = Microbot.getClient().getNpcs().stream()
-                .filter((npc) -> npc.getCombatLevel() > 0 && !npc.isDead() && !npc.isInteracting())
-                .sorted(Comparator.comparingInt(value -> value.getLocalLocation().distanceTo(Microbot.getClient().getLocalPlayer().getLocalLocation())))
-                .collect(Collectors.toList());
-
-        return npcs.toArray(new NPC[npcs.size()]);
+    /**
+     * @param name
+     * @return
+     */
+    public static Stream<NPC> getNpcs(String name) {
+        return getNpcs(name, true);
     }
 
-    public static NPC[] getAttackableNpcs(String name) {
-        List<NPC> npcs = Microbot.getClient().getNpcs().stream()
-                .filter((npc) -> npc.getCombatLevel() > 0 && !npc.isDead() && npc.getName().toLowerCase().equals(name) && !npc.isInteracting())
-                .sorted(Comparator.comparingInt(value -> value.getLocalLocation().distanceTo(Microbot.getClient().getLocalPlayer().getLocalLocation())))
-                .collect(Collectors.toList());
+    /**
+     * @param name
+     * @param exact
+     * @return
+     */
+    public static Stream<NPC> getNpcs(String name, boolean exact) {
+        Stream<NPC> npcs = getNpcs();
 
-        return npcs.toArray(new NPC[npcs.size()]);
+        if (exact) {
+            npcs = npcs.filter(x -> x.getName().equalsIgnoreCase(name));
+        } else {
+            npcs = npcs.filter(x -> x.getName().toLowerCase().contains(name.toLowerCase()));
+        }
+
+        return npcs;
+    }
+
+    public static Stream<NPC> getAttackableNpcs() {
+        Stream<NPC> npcs = Microbot.getClient().getNpcs().stream()
+                .filter((npc) -> npc.getCombatLevel() > 0 && !npc.isDead())
+                .sorted(Comparator.comparingInt(value -> value.getLocalLocation().distanceTo(Microbot.getClient().getLocalPlayer().getLocalLocation())));
+        if (!Rs2Player.isInMulti()) {
+            npcs = npcs.filter((npc) -> !npc.isInteracting());
+        }
+        return npcs;
+    }
+
+    public static Stream<NPC> getAttackableNpcs(String name) {
+        return getAttackableNpcs()
+                .filter(x -> x.getName().equalsIgnoreCase(name));
     }
 
     public static NPC[] getPestControlPortals() {
         List<NPC> npcs = Microbot.getClient().getNpcs().stream()
-                .filter((npc) -> !npc.isDead() && npc.getHealthRatio() > 0 && npc.getName().toLowerCase().equals("portal"))
+                .filter((npc) -> !npc.isDead() && npc.getHealthRatio() > 0 && npc.getName().equalsIgnoreCase("portal"))
                 .sorted(Comparator.comparingInt(value -> value.getLocalLocation().distanceTo(Microbot.getClient().getLocalPlayer().getLocalLocation())))
                 .collect(Collectors.toList());
 
@@ -134,78 +173,101 @@ public class Rs2Npc {
     }
 
     public static NPC getNpc(String name) {
-        return Microbot.getClientThread().runOnClientThread(() -> {
-            List<NPC> npcs = Arrays.stream(getNpcs()).collect(Collectors.toList());
-            if (npcs.isEmpty())
-                return null;
-            else
-                return npcs.stream()
-                        .filter(x -> x != null && x.getName() != null && x.getName().equalsIgnoreCase(name))
-                        .min(Comparator.comparingInt(value -> value.getLocalLocation().distanceTo(Microbot.getClient().getLocalPlayer().getLocalLocation())))
-                        .orElse(null);
-
-        });
+        return getNpc(name, true);
     }
 
-    public static List<NPC> getNpcs(String name) {
-        List<NPC> npcs = Microbot.getClientThread().runOnClientThread(() -> Microbot.getClient().getNpcs().stream()
-                .filter(x -> x != null && x.getName().toLowerCase().equalsIgnoreCase(name.toLowerCase()))
-                .sorted(Comparator.comparingInt(value -> value.getLocalLocation().distanceTo(Microbot.getClient().getLocalPlayer().getLocalLocation())))
-                .collect(Collectors.toList()));
-
-        return npcs;
+    public static NPC getNpc(String name, boolean exact) {
+        return getNpcs(name, exact)
+                .findFirst()
+                .orElse(null);
     }
 
     public static NPC getNpc(int id) {
-        return Microbot.getClientThread().runOnClientThread(() -> {
-            List<NPC> npcs = Arrays.stream(getNpcs()).collect(Collectors.toList());
-            if (npcs.isEmpty())
-                return null;
-            else
-                return npcs.stream()
-                        .filter(x -> x != null && x.getId() == id)
-                        .min(Comparator.comparingInt(value -> value.getLocalLocation().distanceTo(Microbot.getClient().getLocalPlayer().getLocalLocation())))
-                        .orElse(null);
-        });
+        return getNpcs()
+                .filter(x -> x.getId() == id)
+                .findFirst()
+                .orElse(null);
     }
 
     public static Optional<NPC> getNpc(int id, List<Integer> excludedIndexes) {
-        return Microbot.getClientThread().runOnClientThread(() -> {
-            List<NPC> npcs = Arrays.stream(getNpcs()).collect(Collectors.toList());
-            if (npcs.isEmpty())
-                return Optional.empty();
-            else
-                return npcs.stream()
-                        .filter(x -> x != null && x.getId() == id && !excludedIndexes.contains(x.getIndex()))
-                        .min(Comparator.comparingInt(value -> value.getLocalLocation().distanceTo(Microbot.getClient().getLocalPlayer().getLocalLocation())));
-        });
+        return getNpcs()
+                .filter(x -> x != null && x.getId() == id && !excludedIndexes.contains(x.getIndex()))
+                .min(Comparator.comparingInt(value ->
+                        value.getLocalLocation().distanceTo(Microbot.getClient().getLocalPlayer().getLocalLocation())));
     }
 
 
     public static boolean interact(NPC npc, String action) {
         if (npc == null) return false;
+        Microbot.status = action + " " + npc.getName();
         try {
-            npcInteraction = npc;
-            npcAction = action;
-            if (Calculations.tileOnScreen(npc)) {
-                Microbot.getMouse().click(npc.getCanvasTilePoly().getBounds());
-            } else {
-                Microbot.getMouse().clickFast(Random.random(0, Microbot.getClient().getCanvasWidth()), Random.random(0, Microbot.getClient().getCanvasHeight()));
+            NPCComposition npcComposition = Microbot.getClientThread().runOnClientThread(() -> Microbot.getClient().getNpcDefinition(npc.getId()));
+
+            int index = 0;
+            for (int i = 0; i < npcComposition.getActions().length; i++) {
+                String npcAction = npcComposition.getActions()[i];
+                if (npcAction == null || !npcAction.equalsIgnoreCase(action)) continue;
+                index = i;
             }
-            sleep(100);
-            npcInteraction = null;
-            npcAction = null;
-        } catch(Exception ex) {
+
+            MenuAction menuAction = getMenuAction(index);
+
+            if (!Rs2Camera.isTileOnScreen(npc.getLocalLocation())) {
+                Microbot.getClient().setCameraPitchTarget(Random.random(430, 460));
+                Microbot.getMouse().scrollDown(new net.runelite.api.Point(1, 1));
+                Microbot.getMouse().scrollDown(new net.runelite.api.Point(1, 1));
+                Microbot.getMouse().scrollDown(new net.runelite.api.Point(1, 1));
+                Rs2Camera.turnTo(npc);
+            }
+
+            if (menuAction != null) {
+                Microbot.doInvoke(new NewMenuEntry(0, 0, menuAction.getId(), npc.getIndex(), -1, npc.getName()), new Rectangle(npc.getCanvasTilePoly().getBounds()));
+                //Rs2Reflection.invokeMenu(0, 0, menuAction.getId(), npc.getIndex(),-1, action, "", -1, -1);
+            }
+
+        } catch (Exception ex) {
             System.out.println(ex.getMessage());
         }
 
         return true;
     }
 
+    @Nullable
+    private static MenuAction getMenuAction(int index) {
+        MenuAction menuAction = null;
+
+        if (Microbot.getClient().isWidgetSelected()) {
+            menuAction = MenuAction.WIDGET_TARGET_ON_NPC;
+        } else if (index == 0) {
+            menuAction = MenuAction.NPC_FIRST_OPTION;
+        } else if (index == 1) {
+            menuAction = MenuAction.NPC_SECOND_OPTION;
+        } else if (index == 2) {
+            menuAction = MenuAction.NPC_THIRD_OPTION;
+        } else if (index == 3) {
+            menuAction = MenuAction.NPC_FOURTH_OPTION;
+        } else if (index == 4) {
+            menuAction = MenuAction.NPC_FIFTH_OPTION;
+        }
+        return menuAction;
+    }
+
+    public static boolean interact(NPC npc) {
+        return interact(npc, "");
+    }
+
+    public static boolean interact(int id) {
+        return interact(id, "");
+    }
+
     public static boolean interact(int npcId, String action) {
         NPC npc = getNpc(npcId);
 
         return interact(npc, action);
+    }
+
+    public static boolean attack(NPC npc) {
+        return interact(npc, "attack");
     }
 
     public static boolean attack(int npcId) {
@@ -215,9 +277,21 @@ public class Rs2Npc {
     }
 
     public static boolean attack(String npcName) {
-        NPC npc = getNpc(npcName);
+        return attack(Arrays.asList(npcName));
+    }
 
-        return interact(npc, "attack");
+    public static boolean attack(List<String> npcNames) {
+        for (String npcName : npcNames) {
+            NPC npc = getNpc(npcName);
+            if (npc == null) continue;
+            if (!hasLineOfSight(npc)) continue;
+            if (Rs2Combat.inCombat()) continue;
+            if (npc.isInteracting() && npc.getInteracting() != Microbot.getClient().getLocalPlayer() && !Rs2Player.isInMulti())
+                continue;
+
+            return interact(npc, "attack");
+        }
+        return false;
     }
 
     public static boolean interact(String npcName, String action) {
@@ -232,41 +306,34 @@ public class Rs2Npc {
         return interact(npc, "pickpocket");
     }
 
-    public static void handleMenuSwapper(MenuEntry menuEntry) {
-        if (npcInteraction == null) return;
-        try {
-            menuEntry.setIdentifier(npcInteraction.getIndex());
-            menuEntry.setParam0(0);
-            menuEntry.setTarget("<col=ffff00>" + npcInteraction.getName() + "<col=ff00>  (level-" + npcInteraction.getCombatLevel() + ")");
-            menuEntry.setParam1(0);
-            menuEntry.setOption(Rs2Npc.npcAction);
+    public static boolean pickpocket(NPC npc) {
+        return interact(npc, "pickpocket");
+    }
 
-            NPCComposition npcComposition = Microbot.getClient().getNpcDefinition(npcInteraction.getId());
+    public static boolean hasLineOfSight(NPC npc) {
+        if (npc == null) return false;
+        return new WorldArea(
+                npc.getWorldLocation(),
+                npc.getComposition().getSize(),
+                npc.getComposition().getSize())
+                .hasLineOfSightTo(Microbot.getClient(), Microbot.getClient().getLocalPlayer().getWorldLocation().toWorldArea());
+    }
 
-            int index = -1;
-            for (int i = 0; i < npcComposition.getActions().length; i++) {
-                String action = npcComposition.getActions()[i];
-                if (action == null || !action.equalsIgnoreCase(npcAction)) continue;
-                index = i;
-            }
-
-            if (Microbot.getClient().isWidgetSelected()) {
-                menuEntry.setType(MenuAction.WIDGET_TARGET_ON_NPC);
-            } else if (index == 0) {
-                menuEntry.setType(MenuAction.NPC_FIRST_OPTION);
-            } else if (index == 1) {
-                menuEntry.setType(MenuAction.NPC_SECOND_OPTION);
-            } else if (index == 2) {
-                menuEntry.setType(MenuAction.NPC_THIRD_OPTION);
-
-            } else if (index == 3) {
-                menuEntry.setType(MenuAction.NPC_FOURTH_OPTION);
-
-            } else if (index == 4) {
-                menuEntry.setType(MenuAction.NPC_FIFTH_OPTION);
-            }
-        } catch (Exception ex) {
-            System.out.println("NPC MENU SWAP FAILED WITH MESSAGE: " + ex.getMessage());
+    public static WorldPoint getWorldLocation(NPC npc) {
+        if (Microbot.getClient().isInInstancedRegion()) {
+            LocalPoint l = LocalPoint.fromWorld(Microbot.getClient(), npc.getWorldLocation());
+            WorldPoint npcInstancedWorldLocation = WorldPoint.fromLocalInstance(Microbot.getClient(), l);
+            return npcInstancedWorldLocation;
+        } else {
+            return npc.getWorldLocation();
         }
+    }
+
+    /**
+     * @param player
+     * @return
+     */
+    public static List<NPC> getNpcsAttackingPlayer(Player player) {
+        return getNpcs().filter(x -> x.getInteracting() != null && x.getInteracting() == player).collect(Collectors.toList());
     }
 }

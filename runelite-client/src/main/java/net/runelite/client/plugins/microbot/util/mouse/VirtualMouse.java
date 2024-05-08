@@ -24,30 +24,20 @@ public class VirtualMouse extends Mouse {
     public VirtualMouse() {
         super();
         this.scheduledExecutorService = Executors.newScheduledThreadPool(10);
+        //getCanvas().setFocusable(false);
     }
 
     public Mouse click(Point point, boolean rightClick) {
 
         if (point == null) return this;
 
-        mouseEvent(MouseEvent.MOUSE_MOVED, point, rightClick);
-        sleep(200, 300);
-        mouseEvent(MouseEvent.MOUSE_PRESSED, point, rightClick);
-        mouseEvent(MouseEvent.MOUSE_RELEASED, point, rightClick);
-        mouseEvent(MouseEvent.MOUSE_CLICKED, point, rightClick);
-
-        mousePositions.add(point);
-        return this;
-    }
-
-    public Mouse clickFast(Point point, boolean rightClick) {
-
+        mouseEvent(MouseEvent.MOUSE_ENTERED, point, rightClick);
+        mouseEvent(MouseEvent.MOUSE_EXITED, point, rightClick);
         mouseEvent(MouseEvent.MOUSE_MOVED, point, rightClick);
         mouseEvent(MouseEvent.MOUSE_PRESSED, point, rightClick);
         mouseEvent(MouseEvent.MOUSE_RELEASED, point, rightClick);
-        mouseEvent(MouseEvent.MOUSE_CLICKED, point, rightClick);
+        mouseEvent(MouseEvent.MOUSE_FIRST, point, rightClick);
 
-        mousePositions.add(point);
         return this;
     }
 
@@ -64,22 +54,13 @@ public class VirtualMouse extends Mouse {
     }
 
     @Override
+    public Mouse click(int x, int y, boolean rightClick) {
+        return click(new Point(x, y), rightClick);
+    }
+
+    @Override
     public Mouse click(Point point) {
         return click(point, false);
-    }
-
-    @Override
-    public Mouse clickFast(Point point) {
-        return clickFast(point, false);
-    }
-    @Override
-    public Mouse clickFast() {
-        return clickFast(new Point(Random.random(10, 100), Random.random(10, 100)));
-    }
-
-    @Override
-    public Mouse clickFast(int x, int y) {
-        return clickFast(new Point(x, y), false);
     }
 
     @Override
@@ -87,28 +68,13 @@ public class VirtualMouse extends Mouse {
         return click(new Point((int) MouseInfo.getPointerInfo().getLocation().getX(), (int) MouseInfo.getPointerInfo().getLocation().getY()));
     }
 
-    @Override
-    public Mouse rightClick(Point point) {
-        return click(point, true);
-    }
-
-    @Override
-    public Mouse rightClick(Rectangle rectangle) {
-        return click(new Point((int) rectangle.getCenterX() , (int) rectangle.getCenterY()), true);
-    }
-
-    @Override
-    public Mouse rightClick() {
-        return click(new Point(getLastMousePosition().getX(), getLastMousePosition().getY()), true);
-    }
-
     public Mouse move(Point point) {
         long time = System.currentTimeMillis();
 
         MouseEvent mouseMove = new MouseEvent(getCanvas(), MouseEvent.MOUSE_MOVED, time, 0, point.getX(), point.getY(), 1, false, MouseEvent.BUTTON1);
-        Microbot.getEventHandler().dispatchUnblockedEvent(mouseMove);
 
-        mousePositions.add(point);
+        getCanvas().dispatchEvent(mouseMove);
+
         return this;
     }
 
@@ -116,9 +82,9 @@ public class VirtualMouse extends Mouse {
         long time = System.currentTimeMillis();
 
         MouseEvent mouseMove = new MouseEvent(getCanvas(), MouseEvent.MOUSE_MOVED, time, 0, (int) rect.getCenterX(), (int) rect.getCenterY(), 1, false, MouseEvent.BUTTON1);
-        Microbot.getEventHandler().dispatchUnblockedEvent(mouseMove);
 
-        mousePositions.add(new Point((int) rect.getCenterX(), (int) rect.getCenterY()));
+        getCanvas().dispatchEvent(mouseMove);
+
         return this;
     }
 
@@ -127,9 +93,10 @@ public class VirtualMouse extends Mouse {
         Point point = new Point((int) polygon.getBounds().getCenterX(), (int) polygon.getBounds().getCenterY());
 
         MouseEvent mouseMove = new MouseEvent(getCanvas(), MouseEvent.MOUSE_MOVED, time, 0, point.getX(), point.getY(), 1, false, MouseEvent.BUTTON1);
-        Microbot.getEventHandler().dispatchUnblockedEvent(mouseMove);
 
-        mousePositions.add(point);
+        getCanvas().dispatchEvent(mouseMove);
+
+
         return this;
     }
 
@@ -142,9 +109,9 @@ public class VirtualMouse extends Mouse {
             MouseEvent mouseScroll = new MouseWheelEvent(getCanvas(), MouseEvent.MOUSE_WHEEL, time, 0, point.getX(), point.getY(), 0, false,
                     0, 10, 2);
 
-            Microbot.getEventHandler().dispatchUnblockedEvent(mouseScroll);
+        getCanvas().dispatchEvent(mouseScroll);
 
-            mousePositions.add(point);
+
         }, random(40, 100), TimeUnit.MILLISECONDS);
         return this;
     }
@@ -155,11 +122,16 @@ public class VirtualMouse extends Mouse {
         MouseEvent mouseScroll = new MouseWheelEvent(getCanvas(), MouseEvent.MOUSE_WHEEL, time, 0, point.getX(), point.getY(), 0, false,
                 0, -10, -2);
 
-        Microbot.getEventHandler().dispatchUnblockedEvent(mouseScroll);
-
-        mousePositions.add(point);
+        getCanvas().dispatchEvent(mouseScroll);
 
         return this;
+    }
+
+    @Override
+    public java.awt.Point getMousePosition() {
+        PointerInfo pointerInfo = MouseInfo.getPointerInfo();
+
+        return pointerInfo != null ? pointerInfo.getLocation() : null;
     }
 
     @Override
@@ -175,13 +147,8 @@ public class VirtualMouse extends Mouse {
     {
         int button = rightClick ? MouseEvent.BUTTON3 : MouseEvent.BUTTON1;
 
-        MouseEvent e = new MouseEvent(
-                getCanvas(), id,
-                System.currentTimeMillis(),
-                0, point.getX(), point.getY(),
-                1, false, button
-        );
+        MouseEvent e = new MouseEvent(Microbot.getClient().getCanvas(), id, System.currentTimeMillis(), 0, point.getX(), point.getY(), 1, false, button);
 
-        Microbot.getEventHandler().dispatchUnblockedEvent(e);
+        getCanvas().dispatchEvent(e);
     }
 }

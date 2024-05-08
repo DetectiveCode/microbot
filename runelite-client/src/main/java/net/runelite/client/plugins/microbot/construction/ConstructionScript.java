@@ -8,10 +8,9 @@ import net.runelite.client.plugins.microbot.Microbot;
 import net.runelite.client.plugins.microbot.Script;
 import net.runelite.client.plugins.microbot.construction.enums.ConstructionState;
 import net.runelite.client.plugins.microbot.util.gameobject.Rs2GameObject;
-import net.runelite.client.plugins.microbot.util.inventory.Inventory;
-import net.runelite.client.plugins.microbot.util.keyboard.VirtualKeyboard;
+import net.runelite.client.plugins.microbot.util.inventory.Rs2Inventory;
+import net.runelite.client.plugins.microbot.util.keyboard.Rs2Keyboard;
 import net.runelite.client.plugins.microbot.util.math.Random;
-import net.runelite.client.plugins.microbot.util.menu.Rs2Menu;
 import net.runelite.client.plugins.microbot.util.npc.Rs2Npc;
 import net.runelite.client.plugins.microbot.util.tabs.Rs2Tab;
 import net.runelite.client.plugins.microbot.util.widget.Rs2Widget;
@@ -87,7 +86,7 @@ public class ConstructionScript extends Script {
         TileObject oakLarderSpace = getOakLarderSpace();
         TileObject oakLarder = getOakLarder();
         NPC butler = getButler();
-        boolean hasRequiredPlanks = Inventory.hasItemAmount(8778, Random.random(8, 16)); //oak plank
+        boolean hasRequiredPlanks = Rs2Inventory.hasItemAmount(8778, Random.random(8, 16)); //oak plank
         if (oakLarderSpace == null && oakLarder != null) {
             state = ConstructionState.Remove;
         } else if (oakLarderSpace != null && oakLarder == null && hasRequiredPlanks) {
@@ -104,9 +103,9 @@ public class ConstructionScript extends Script {
     private void build() {
         TileObject oakLarderSpace = getOakLarderSpace();
         if (oakLarderSpace == null) return;
-        if (Rs2Menu.doAction("Build", oakLarderSpace.getCanvasTilePoly())) {
+        if (Rs2GameObject.interact(oakLarderSpace, "Build")) {
             sleepUntilOnClientThread(() -> hasFurnitureInterfaceOpen(), 5000);
-            VirtualKeyboard.keyPress('2');
+            Rs2Keyboard.keyPress('2');
             sleepUntilOnClientThread(() -> getOakLarder() != null, 5000);
         }
     }
@@ -114,9 +113,9 @@ public class ConstructionScript extends Script {
     private void remove() {
         TileObject oaklarder = getOakLarder();
         if (oaklarder == null) return;
-        if (Rs2Menu.doAction("Remove", oaklarder.getCanvasTilePoly())) {
+        if (Rs2GameObject.interact(oaklarder, "Remove")) {
             sleepUntilOnClientThread(() -> hasRemoveLarderInterfaceOpen(), 5000);
-            VirtualKeyboard.keyPress('1');
+            Rs2Keyboard.keyPress('1');
             sleepUntilOnClientThread(() -> getOakLarderSpace() != null, 5000);
         }
     }
@@ -141,16 +140,16 @@ public class ConstructionScript extends Script {
                 Microbot.getMouse().click(callServantWidget.getCanvasLocation());
         }
 
-        if (Rs2Menu.doAction("Talk-to", butler.getCanvasTilePoly())) {
+        if (Rs2Npc.interact(butler, "Talk-to")) {
             sleep(1200, 2000);
             if (hasDialogueOptionToUnnote()) {
-                VirtualKeyboard.keyPress('1');
+                Rs2Keyboard.keyPress('1');
                 sleepUntilOnClientThread(() -> !hasDialogueOptionToUnnote());
             } else if (hasPayButlerDialogue()) {
-                VirtualKeyboard.keyPress(KeyEvent.VK_SPACE);
+                Rs2Keyboard.keyPress(KeyEvent.VK_SPACE);
                 sleep(1200, 2000);
                 if (hasDialogueOptionToPay()) {
-                    VirtualKeyboard.keyPress('1');
+                    Rs2Keyboard.keyPress('1');
                 }
             }
         }

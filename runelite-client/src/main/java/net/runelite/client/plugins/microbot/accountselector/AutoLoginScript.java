@@ -13,12 +13,14 @@ public class AutoLoginScript extends Script {
 
     public boolean run(AutoLoginConfig autoLoginConfig) {
         mainScheduledFuture = scheduledExecutorService.scheduleWithFixedDelay(() -> {
-            Widget clickHereToPlayButton = Rs2Widget.getWidget(24772680); //on login screen
-            if (clickHereToPlayButton != null) {
-                Rs2Widget.clickWidget(clickHereToPlayButton.getId());
-            }
             if (Microbot.pauseAllScripts)
                 return;
+
+            Widget clickHereToPlayButton = Rs2Widget.getWidget(24772680); //on login screen
+            if (Microbot.getClientThread().runOnClientThread(() -> clickHereToPlayButton != null && !clickHereToPlayButton.isHidden())) {
+                Rs2Widget.clickWidget(clickHereToPlayButton.getId());
+            }
+
             try {
                 if (Microbot.getClient().getGameState() == GameState.LOGIN_SCREEN) {
                     if (autoLoginConfig.useRandomWorld()) {
@@ -28,6 +30,8 @@ public class AutoLoginScript extends Script {
                     }
                     sleep(5000);
                 }
+
+
             } catch (Exception ex) {
                 System.out.println(ex.getMessage());
             }

@@ -2,7 +2,6 @@ package net.runelite.client.plugins.microbot.tithefarm;
 
 import net.runelite.api.GameObject;
 import net.runelite.api.ItemID;
-import net.runelite.api.Point;
 import net.runelite.api.WallObject;
 import net.runelite.api.coords.WorldPoint;
 import net.runelite.client.plugins.microbot.Microbot;
@@ -11,22 +10,26 @@ import net.runelite.client.plugins.microbot.tithefarm.enums.TitheFarmLanes;
 import net.runelite.client.plugins.microbot.tithefarm.enums.TitheFarmMaterial;
 import net.runelite.client.plugins.microbot.tithefarm.enums.TitheFarmState;
 import net.runelite.client.plugins.microbot.tithefarm.models.TitheFarmPlant;
-import net.runelite.client.plugins.microbot.util.dialogues.Dialogue;
+import net.runelite.client.plugins.microbot.util.dialogues.Rs2Dialogue;
 import net.runelite.client.plugins.microbot.util.gameobject.Rs2GameObject;
-import net.runelite.client.plugins.microbot.util.inventory.Inventory;
-import net.runelite.client.plugins.microbot.util.keyboard.VirtualKeyboard;
-import net.runelite.client.plugins.microbot.util.math.Calculations;
+import net.runelite.client.plugins.microbot.util.inventory.Rs2Inventory;
+import net.runelite.client.plugins.microbot.util.inventory.Rs2Item;
+import net.runelite.client.plugins.microbot.util.keyboard.Rs2Keyboard;
 import net.runelite.client.plugins.microbot.util.math.Random;
 import net.runelite.client.plugins.microbot.util.player.Rs2Player;
-import net.runelite.client.plugins.microbot.util.tabs.Tab;
+import net.runelite.client.plugins.microbot.util.tabs.Rs2Tab;
+import net.runelite.client.plugins.microbot.util.walker.Rs2Walker;
 import net.runelite.client.plugins.microbot.util.widget.Rs2Widget;
 
 import java.time.Instant;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Comparator;
+import java.util.List;
 import java.util.concurrent.TimeUnit;
 
 import static net.runelite.client.plugins.microbot.tithefarm.enums.TitheFarmState.*;
-import static net.runelite.client.plugins.microbot.util.dialogues.Dialogue.hasSelectAnOption;
+import static net.runelite.client.plugins.microbot.util.dialogues.Rs2Dialogue.hasSelectAnOption;
 
 /**
  * TODO list:
@@ -163,20 +166,21 @@ public class TitheFarmingScript extends Script {
         if (!Microbot.isLoggedIn()) return false;
         state = STARTING;
         plants = new ArrayList<>();
-        initialFruit = Inventory.getItemAmount(Objects.requireNonNull(TitheFarmMaterial.getSeedForLevel()).getFruitId());
+        Rs2Item rs2ItemSeed = Rs2Inventory.get(TitheFarmMaterial.getSeedForLevel().getFruitId());
+        initialFruit = rs2ItemSeed == null ? 0 : rs2ItemSeed.quantity;
         mainScheduledFuture = scheduledExecutorService.scheduleWithFixedDelay(() -> {
             try {
                 if (!super.run()) return;
 
                 //Dialogue stuff only applicable if you enter for the first time
-                if (Dialogue.isInDialogue()) {
-                    Dialogue.clickContinue();
+                if (Rs2Dialogue.isInDialogue()) {
+                    Rs2Dialogue.clickContinue();
                     sleep(400, 600);
                     return;
                 }
 
                 if (hasSelectAnOption()) {
-                    VirtualKeyboard.typeString("3");
+                    Rs2Keyboard.typeString("3");
                     sleep(1500, 1800);
                     return;
                 }
@@ -191,13 +195,13 @@ public class TitheFarmingScript extends Script {
                             state = TitheFarmState.STARTING;
                         } else {
                             takeSeeds();
-                            if (Inventory.hasItem(TitheFarmMaterial.getSeedForLevel().getName())) {
+                            if (Rs2Inventory.hasItem(TitheFarmMaterial.getSeedForLevel().getName())) {
                                 enter();
                             }
                         }
                         break;
                     case STARTING:
-                        Tab.switchToInventoryTab();
+                        Rs2Tab.switchToInventoryTab();
                         init(config);
                         validateInventory();
                         DropFertiliser();
@@ -281,12 +285,12 @@ public class TitheFarmingScript extends Script {
         final TitheFarmPlant finalPlant = plant;
 
         if (plant.getGameObject().getWorldLocation().distanceTo2D(Microbot.getClient().getLocalPlayer().getWorldLocation()) > DISTANCE_TRESHHOLD_MINIMAP_WALK) {
-            Microbot.getWalker().walkMiniMap(plant.getGameObject().getWorldLocation());
+            Rs2Walker.walkMiniMap(plant.getGameObject().getWorldLocation());
             return;
         }
 
         if (plant.isEmptyPatch()) { //start planting seeds
-            Inventory.useItemFast(Objects.requireNonNull(TitheFarmMaterial.getSeedForLevel()).getName(), "Use");
+            Rs2Inventory.interact(TitheFarmMaterial.getSeedForLevel().getName(), "Use");
             clickPatch(plant);
             sleepUntil(Rs2Player::isAnimating, config.sleepAfterPlantingSeed());
             if (Rs2Player.isAnimating()) {
@@ -295,7 +299,7 @@ public class TitheFarmingScript extends Script {
         }
 
         if (plant.isValidToWater()) {
-            clickPatch(plant);
+            clickPatch(plant, "water");
             sleepUntil(Rs2Player::isAnimating, config.sleepAfterWateringSeed());
             if (Rs2Player.isAnimating()) {
                 sleepUntil(() -> plants.stream().noneMatch(x -> x.getIndex() == finalPlant.getIndex() && x.isValidToWater()));
@@ -305,7 +309,7 @@ public class TitheFarmingScript extends Script {
 
 
         if (plant.isValidToHarvest()) {
-            clickPatch(plant);
+            clickPatch(plant, "harvest");
             sleepUntil(Rs2Player::isAnimating, config.sleepAfterHarvestingSeed());
             if (Rs2Player.isAnimating()) {
                 sleepUntil(() -> plants.stream().anyMatch(x -> x.getIndex() == finalPlant.getIndex() && x.isEmptyPatch()));
@@ -315,11 +319,11 @@ public class TitheFarmingScript extends Script {
 
         // Helper method to validate inventory items
         private void validateInventory() {
-            if (!Inventory.hasItem(ItemID.SEED_DIBBER) || !Inventory.hasItem(ItemID.SPADE)) {
+            if (!Rs2Inventory.hasItem(ItemID.SEED_DIBBER) || !Rs2Inventory.hasItem(ItemID.SPADE)) {
                 Microbot.showMessage("You need a seed dibber and a spade in your inventory!");
                 shutdown();
             }
-            if (!Inventory.hasItemAmount("watering can", WATERING_CANS_AMOUNT) && !Inventory.hasItem(ItemID.GRICOLLERS_CAN)) {
+            if (!Rs2Inventory.hasItemAmount("watering can", WATERING_CANS_AMOUNT) && !Rs2Inventory.hasItem(ItemID.GRICOLLERS_CAN)) {
                 Microbot.showMessage("You need at least 8 watering can(8) or a Gricoller's can!");
                 shutdown();
             }
@@ -335,7 +339,7 @@ public class TitheFarmingScript extends Script {
         }
 
         private void validateSeedsAndPatches() {
-            if (!Inventory.hasItem(TitheFarmMaterial.getSeedForLevel().getName()) && hasAllEmptyPatches()) {
+            if (!Rs2Inventory.hasItem(TitheFarmMaterial.getSeedForLevel().getName()) && hasAllEmptyPatches()) {
                 leave();
             }
         }
@@ -348,13 +352,24 @@ public class TitheFarmingScript extends Script {
                 plant.regionY,
                 Microbot.getClient().getPlane());
 
-        Point point = Calculations.worldToCanvas(worldPoint.getX(), worldPoint.getY());
-        Microbot.getMouse().click(point);
+        Rs2GameObject.interact(worldPoint);
+
+        //Point point = Calculations.worldToCanvas(worldPoint.getX(), worldPoint.getY());
+        //Microbot.getMouse().click(point);
+    }
+
+    private static void clickPatch(TitheFarmPlant plant, String action) {
+        WorldPoint worldPoint = WorldPoint.fromRegion(Microbot.getClient().getLocalPlayer().getWorldLocation().getRegionID(),
+                plant.regionX,
+                plant.regionY,
+                Microbot.getClient().getPlane());
+
+        Rs2GameObject.interact(worldPoint, action);
     }
 
     private static void DropFertiliser() {
-        if (Inventory.hasItem("Gricoller's fertiliser")) {
-            Inventory.drop("Gricoller's fertiliser");
+        if (Rs2Inventory.hasItem("Gricoller's fertiliser")) {
+            Rs2Inventory.drop("Gricoller's fertiliser");
         }
     }
 
@@ -364,7 +379,7 @@ public class TitheFarmingScript extends Script {
             sleepUntil(() -> gricollerCanCharges != -1);
             if (gricollerCanCharges < config.gricollerCanRefillTreshhold()) {
                 walkToBarrel();
-                Inventory.useItemFast(ItemID.GRICOLLERS_CAN, "Use");
+                Rs2Inventory.interact(ItemID.GRICOLLERS_CAN, "Use");
                 Rs2GameObject.interact("Water barrel");
                 sleepUntil(Microbot::isAnimating, 10000);
             } else {
@@ -372,18 +387,18 @@ public class TitheFarmingScript extends Script {
             }
         } else if (TitheFarmMaterial.hasWateringCanToBeFilled()) {
             walkToBarrel();
-            Inventory.useItemFast(TitheFarmMaterial.getWateringCanToBeFilled(), "Use");
+            Rs2Inventory.interact(TitheFarmMaterial.getWateringCanToBeFilled(), "Use");
             Rs2GameObject.interact("Water barrel", "Use");
-            sleepUntil(() -> Inventory.hasItemAmount(ItemID.WATERING_CAN8, WATERING_CANS_AMOUNT), 60000);
+            sleepUntil(() -> Rs2Inventory.hasItemAmount(ItemID.WATERING_CAN8, WATERING_CANS_AMOUNT), 60000);
         } else {
             state = PLANTING_SEEDS;
         }
     }
 
     private void walkToBarrel() {
-        final GameObject gameObject = Rs2GameObject.findObject("Water barrel");
+        final GameObject gameObject = Rs2GameObject.get("Water barrel");
         if (gameObject.getWorldLocation().distanceTo2D(Microbot.getClient().getLocalPlayer().getWorldLocation()) > DISTANCE_TRESHHOLD_MINIMAP_WALK) {
-            Microbot.getWalker().walkMiniMap(gameObject.getWorldLocation());
+            Rs2Walker.walkMiniMap(gameObject.getWorldLocation());
             sleepUntil(Microbot::isMoving);
         }
         sleepUntil(() -> gameObject.getWorldLocation().distanceTo2D(Microbot.getClient().getLocalPlayer().getWorldLocation()) < DISTANCE_TRESHHOLD_MINIMAP_WALK);
@@ -391,12 +406,12 @@ public class TitheFarmingScript extends Script {
 
     private void checkGricollerCharges() {
         gricollerCanCharges = -1;
-        Inventory.useItemFast(ItemID.GRICOLLERS_CAN, "check");
+        Rs2Inventory.interact(ItemID.GRICOLLERS_CAN, "check");
     }
 
     private void takeSeeds() {
-        if (Inventory.hasItem(TitheFarmMaterial.getSeedForLevel().getName())) {
-            Inventory.drop(TitheFarmMaterial.getSeedForLevel().getName());
+        if (Rs2Inventory.hasItem(TitheFarmMaterial.getSeedForLevel().getName())) {
+            Rs2Inventory.drop(TitheFarmMaterial.getSeedForLevel().getName());
             sleep(400, 600);
         }
         Rs2GameObject.interact("Seed table");
@@ -404,22 +419,22 @@ public class TitheFarmingScript extends Script {
         if (!result) return;
         keyPress(TitheFarmMaterial.getSeedForLevel().getOption());
         sleep(1000);
-        VirtualKeyboard.typeString(String.valueOf(Random.random(1000, 10000)));
+        Rs2Keyboard.typeString(String.valueOf(Random.random(1000, 10000)));
         sleep(600);
-        VirtualKeyboard.enter();
-        sleepUntil(() -> Inventory.hasItem(TitheFarmMaterial.getSeedForLevel().getName()));
+        Rs2Keyboard.enter();
+        sleepUntil(() -> Rs2Inventory.hasItem(TitheFarmMaterial.getSeedForLevel().getName()));
     }
 
     private void enter() {
         WallObject farmDoor = Rs2GameObject.findDoor(FARM_DOOR);
-        click(farmDoor);
+        Rs2GameObject.interact(farmDoor);
         sleepUntil(this::isInMinigame);
     }
 
     private void leave() {
         WallObject farmDoor = Rs2GameObject.findDoor(FARM_DOOR);
-        click(farmDoor);
-        sleepUntil(() -> !Inventory.hasItem(FERTILISER), 8000);
+        Rs2GameObject.interact(farmDoor);
+        sleepUntil(() -> !Rs2Inventory.hasItem(FERTILISER), 8000);
     }
 
     private boolean hasAllEmptyPatches() {
