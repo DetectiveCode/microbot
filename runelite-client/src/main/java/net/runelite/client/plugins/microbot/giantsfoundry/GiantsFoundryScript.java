@@ -7,10 +7,7 @@ import net.runelite.api.coords.WorldPoint;
 import net.runelite.api.widgets.Widget;
 import net.runelite.client.plugins.microbot.Microbot;
 import net.runelite.client.plugins.microbot.Script;
-import net.runelite.client.plugins.microbot.giantsfoundry.enums.CommissionType;
-import net.runelite.client.plugins.microbot.giantsfoundry.enums.Heat;
-import net.runelite.client.plugins.microbot.giantsfoundry.enums.Stage;
-import net.runelite.client.plugins.microbot.giantsfoundry.enums.State;
+import net.runelite.client.plugins.microbot.giantsfoundry.enums.*;
 import net.runelite.client.plugins.microbot.util.bank.Rs2Bank;
 import net.runelite.client.plugins.microbot.util.equipment.Rs2Equipment;
 import net.runelite.client.plugins.microbot.util.gameobject.Rs2GameObject;
@@ -171,14 +168,15 @@ public class GiantsFoundryScript extends Script {
         if (Rs2Inventory.hasItem(config.FirstBar().getName()) && !canPour()) {
             Rs2GameObject.interact(CRUCIBLE, "Fill");
             sleepUntil(() -> Rs2Widget.findWidget("What metal would you like to add?", null) != null, 5000);
-            Rs2Keyboard.keyPress('3');
+            Rs2Keyboard.keyPress(getKeyFromBar(config.FirstBar()));
             sleepUntil(() -> !Rs2Inventory.hasItem(config.FirstBar().getName()), 5000);
         }
         if (Rs2Inventory.hasItem(config.SecondBar().getName()) && !canPour()) {
             Rs2GameObject.interact(CRUCIBLE, "Fill");
             sleepUntil(() -> Rs2Widget.findWidget("What metal would you like to add?", null) != null, 5000);
             sleep(600, 1200);
-            Rs2Keyboard.keyPress('4');
+
+            Rs2Keyboard.keyPress(getKeyFromBar(config.SecondBar()));
             sleepUntil(() -> !Rs2Inventory.hasItem(config.SecondBar().getName()), 5000);
         }
         if (canPour()) {
@@ -186,6 +184,16 @@ public class GiantsFoundryScript extends Script {
             sleep(5000);
             sleepUntil(() -> !canPour(), 10000);
         }
+    }
+
+    public static char getKeyFromBar(SmithableBars bar) {
+        SmithableBars[] bars = SmithableBars.values();
+        for (int i = 0; i < bars.length; i++) {
+            if (bars[i] == bar) {
+                return (char)('0'+i+1);
+            }
+        }
+        return 'x'; // Not found
     }
 
     public boolean canPickupMould() {
@@ -217,9 +225,18 @@ public class GiantsFoundryScript extends Script {
 
     public void handleGameLoop() {
 
-        calculateGameState();
-
-
+        int remainingDuration = GiantsFoundryState.heatingCoolingState.getRemainingDuration();
+        int change = GiantsFoundryState.getHeatChangeNeeded();
+        if (remainingDuration == 0 && change == 0 && state != State.CRAFTING_WEAPON) {
+            setState(State.CRAFTING_WEAPON);
+        }
+        if (remainingDuration != 0) return;
+        
+        if (change < 0) {
+            setState(State.COOLING_DOWN);
+        } else if (change > 0) {
+            setState(State.HEATING);
+        }
         Stage stage = GiantsFoundryState.getCurrentStage();
         if (stage == null) return;
 
@@ -229,13 +246,19 @@ public class GiantsFoundryScript extends Script {
                         || Rs2Player.getWorldLocation().equals(new WorldPoint(3371, 11498, 0));
                 if (!doAction && isAtLavaTile) return;
                 Rs2GameObject.interact(LAVA_POOL, "Heat-preform");
-                Rs2Player.waitForAnimation();
+                GiantsFoundryState.heatingCoolingState.stop();
+                GiantsFoundryState.heatingCoolingState.setup(7, 0, "heats");
+                GiantsFoundryState.heatingCoolingState.start(GiantsFoundryState.getHeatAmount());
+                sleepUntil(() -> GiantsFoundryState.heatingCoolingState.getRemainingDuration() <= 1);
                 break;
             case COOLING_DOWN:
                 boolean isAtWaterFallTile = Rs2Player.getWorldLocation().equals(new WorldPoint(3360, 11489, 0));
                 if (!doAction && isAtWaterFallTile) return;
                 Rs2GameObject.interact(WATERFALL, "Cool-preform");
-                Rs2Player.waitForAnimation();
+                GiantsFoundryState.heatingCoolingState.stop();
+                GiantsFoundryState.heatingCoolingState.setup(-7, 0, "cools");
+                GiantsFoundryState.heatingCoolingState.start(GiantsFoundryState.getHeatAmount());
+                sleepUntil(() -> GiantsFoundryState.heatingCoolingState.getRemainingDuration() <= 1);
                 break;
             case CRAFTING_WEAPON:
                 boolean isAtStageTile = stage != null
@@ -249,53 +272,7 @@ public class GiantsFoundryScript extends Script {
 
     }
 
-    private void calculateGameState() {
-        int actionsLeft = GiantsFoundryState.getActionsForHeatLevel();
-        Heat currentHeat = GiantsFoundryState.getCurrentHeat();
-        Heat requiredHeat = GiantsFoundryState.getCurrentStage().getHeat();
 
-        if (currentHeat == requiredHeat) {
-            if (actionsLeft > 8 && state != State.CRAFTING_WEAPON) {
-                setState(State.CRAFTING_WEAPON);
-                return;
-            } else if (state == State.CRAFTING_WEAPON && actionsLeft > 3) {
-                return;
-            }
-        }
-
-        switch (currentHeat) {
-            case LOW:
-                if (requiredHeat != Heat.LOW) {
-                    setState(State.HEATING);
-                }
-                break;
-            case MED:
-                if (requiredHeat == Heat.HIGH) {
-                    setState(State.HEATING);
-                } else {
-                    setState(State.COOLING_DOWN);
-                }
-                break;
-            case HIGH:
-                if (requiredHeat != Heat.HIGH) {
-                    setState(State.COOLING_DOWN);
-                }
-                break;
-            case NONE:
-                int currentHeatAmount = getHeatAmount();
-                int[] low = getLowHeatRange();
-                int[] med = getMedHeatRange();
-                int[] high = getHighHeatRange();
-                if ((currentHeatAmount <= low[1]) ||
-                        ((currentHeatAmount >= low[1] && currentHeatAmount <= med[0]) && (requiredHeat == Heat.HIGH || requiredHeat == Heat.MED || requiredHeat == Heat.NONE)) ||
-                        ((currentHeatAmount >= med[1] && currentHeatAmount <= high[0]) && requiredHeat == Heat.HIGH || requiredHeat == Heat.NONE)) {
-                    setState(State.HEATING);
-                } else {
-                    setState(State.COOLING_DOWN);
-                }
-                break;
-        }
-    }
 
     public void craftWeapon() {
         Stage stage = GiantsFoundryState.getCurrentStage();

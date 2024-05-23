@@ -58,6 +58,7 @@ public class Rs2Walker {
                     setTarget(null);
                     break;
                 }
+                System.out.println(ShortestPathPlugin.getPathfinder());
                 if (ShortestPathPlugin.getPathfinder() == null) {
                     if (ShortestPathPlugin.getMarker() == null)
                         break;
@@ -139,19 +140,20 @@ public class Rs2Walker {
                 }
 
                 if (Rs2Player.getWorldLocation().distanceTo(target) < 10) {
+                    System.out.println("walk minimap");
                     Rs2Walker.walkMiniMap(target);
                     sleep(600, 1200);
+                    System.out.println("sleep walk minimap");
                 }
             }
-            return true;
+            return Rs2Player.getWorldLocation().distanceTo(target) < distance;
         });
         return false;
     }
 
-
-    public static boolean walkMiniMap(WorldPoint worldPoint) {
-        if (Microbot.getClient().getMinimapZoom() != 5)
-            Microbot.getClient().setMinimapZoom(5);
+    public static boolean walkMiniMap(WorldPoint worldPoint, int zoomDistance) {
+        if (Microbot.getClient().getMinimapZoom() != zoomDistance)
+            Microbot.getClient().setMinimapZoom(zoomDistance);
 
         Point point = Rs2MiniMap.worldToMinimap(worldPoint);
 
@@ -160,6 +162,11 @@ public class Rs2Walker {
         Microbot.getMouse().click(point);
 
         return true;
+    }
+
+
+    public static boolean walkMiniMap(WorldPoint worldPoint) {
+        return walkMiniMap(worldPoint, 5);
     }
 
     /**
@@ -184,7 +191,7 @@ public class Rs2Walker {
             LocalPoint localPoint = LocalPoint.fromWorld(Microbot.getClient(), worldPoint);
             canv = Perspective.localToCanvas(Microbot.getClient(), localPoint, Microbot.getClient().getPlane());
         } else {
-            canv = Perspective.localToCanvas(Microbot.getClient(), LocalPoint.fromScene(worldPoint.getX() - Microbot.getClient().getBaseX(), worldPoint.getY() - Microbot.getClient().getBaseY()), Microbot.getClient().getPlane());
+            canv = Perspective.localToCanvas(Microbot.getClient(), LocalPoint.fromScene(worldPoint.getX() - Microbot.getClient().getBaseX(), worldPoint.getY() - Microbot.getClient().getBaseY(), Microbot.getClient().getTopLevelWorldView().getScene()), Microbot.getClient().getPlane());
 
         }
 
@@ -210,7 +217,7 @@ public class Rs2Walker {
                 target,
                 1,
                 1)
-                .hasLineOfSightTo(Microbot.getClient(), Microbot.getClient().getLocalPlayer().getWorldLocation().toWorldArea());
+                .hasLineOfSightTo(Microbot.getClient().getTopLevelWorldView(), Microbot.getClient().getLocalPlayer().getWorldLocation().toWorldArea());
     }
 
     public static boolean isCloseToRegion(int distance, int regionX, int regionY) {
@@ -303,8 +310,6 @@ public class Rs2Walker {
             return;
         }
 
-        System.out.println(target == null ? "REESEEETT" : "RECALC");
-
         currentTarget = target;
 
         if (target == null) {
@@ -313,6 +318,7 @@ public class Rs2Walker {
                     ShortestPathPlugin.getPathfinder().cancel();
                 }
                 ShortestPathPlugin.setPathfinder(null);
+                System.out.println("reset path finder!");
             }
 
             Microbot.getWorldMapPointManager().remove(ShortestPathPlugin.getMarker());
@@ -382,14 +388,15 @@ public class Rs2Walker {
 //        if (wallObject == null)
 //            return false;
 
+        System.out.println("checking door: " + a + " b " + b);
         if (wallObject != null) {
-            ObjectComposition objectComposition = Microbot.getClientThread().runOnClientThread(() -> Microbot.getClient().getObjectDefinition(wallObject.getId()));
+            ObjectComposition objectComposition = Rs2GameObject.getObjectComposition(wallObject.getId());
             if (objectComposition == null) {
                 return false;
             }
             boolean found = false;
             for (String action : objectComposition.getActions()) {
-                if (action != null && action.equals("Open")) {
+                if (action != null && (action.equals("Open") || action.contains("pay-toll"))) {
                     found = true;
                     break;
                 }
@@ -432,13 +439,13 @@ public class Rs2Walker {
         if (wallObjectb == null) {
             return false;
         }
-        ObjectComposition objectCompositionb = Microbot.getClientThread().runOnClientThread(() -> Microbot.getClient().getObjectDefinition(wallObjectb.getId()));
+        ObjectComposition objectCompositionb = Rs2GameObject.getObjectComposition(wallObjectb.getId());
         if (objectCompositionb == null) {
             return false;
         }
         boolean foundb = false;
         for (String action : objectCompositionb.getActions()) {
-            if (action != null && action.equals("Open")) {
+            if (action != null && (action.equals("Open") || action.contains("pay-toll"))) {
                 foundb = true;
                 break;
             }
@@ -496,7 +503,11 @@ public class Rs2Walker {
      * @return
      */
     public static boolean handleTransports(List<WorldPoint> path, int indexOfStartPoint) {
-        for (WorldPoint a : ShortestPathPlugin.getTransports().keySet().stream().filter(x -> x.distanceTo(Rs2Player.getWorldLocation()) <= 12).collect(Collectors.toList())) {
+        for (WorldPoint a : ShortestPathPlugin.getTransports().keySet()
+                .stream()
+                .filter(x -> x.distanceTo(Rs2Player.getWorldLocation()) <= 12)
+                .sorted(Comparator.comparingInt(worldPoint -> worldPoint.distanceTo(Rs2Player.getWorldLocation())))
+                .collect(Collectors.toList())) {
 
             for (Transport b : ShortestPathPlugin.getTransports().getOrDefault(a, new ArrayList<>())) {
                 for (WorldPoint origin : WorldPoint.toLocalInstance(Microbot.getClient(), b.getOrigin())) {
@@ -538,6 +549,21 @@ public class Rs2Walker {
                                 } else {
                                     Rs2Walker.walkFastCanvas(path.get(i));
                                     sleep(1200, 1600);
+                                }
+                            } else {
+                                GroundObject groundObject = Rs2GameObject.getGroundObjects(b.getObjectId(), b.getOrigin()).stream().filter(x -> !x.getWorldLocation().equals(Rs2Player.getWorldLocation())).findFirst().orElse(null);
+                                if (groundObject != null && groundObject.getId() == b.getObjectId() && Rs2Camera.isTileOnScreen(groundObject)) {
+                                    if (Rs2GameObject.hasLineOfSight(groundObject)) {
+                                        Rs2GameObject.interact(groundObject, b.getAction());
+                                        if (b.isAgilityShortcut()) {
+                                            Rs2Player.waitForAnimation();
+                                        }
+                                        sleep(1200, 1600);
+                                        return true;
+                                    } else {
+                                        Rs2Walker.walkFastCanvas(path.get(i));
+                                        sleep(1200, 1600);
+                                    }
                                 }
                             }
                         }

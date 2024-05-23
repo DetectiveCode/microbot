@@ -21,6 +21,7 @@ import java.util.concurrent.TimeUnit;
 
 import static net.runelite.api.ObjectID.BRAZIER_29312;
 import static net.runelite.api.ObjectID.BURNING_BRAZIER_29314;
+import static net.runelite.client.plugins.microbot.util.Global.sleepUntilTrue;
 import static net.runelite.client.plugins.microbot.util.player.Rs2Player.eatAt;
 
 
@@ -29,7 +30,7 @@ import static net.runelite.client.plugins.microbot.util.player.Rs2Player.eatAt;
  */
 
 public class MWintertodtScript extends Script {
-    public static double version = 1.0;
+    public static double version = 1.4;
 
     public static State state = State.BANKING;
     public static boolean resetActions = false;
@@ -54,21 +55,23 @@ public class MWintertodtScript extends Script {
 
                 long startTime = System.currentTimeMillis();
 
-                if (config.axeInInventory() && axe.equals("") && !Rs2Inventory.hasItem("axe")) {
-                    Microbot.showMessage("It seems that you selected axeInInventory option but no axe was found in your inventory.");
-                    sleep(5000);
-                    return;
+                if (config.axeInInventory()) {
+                    if (!Rs2Inventory.hasItem("axe")) {
+                        Microbot.showMessage("It seems that you selected axeInInventory option but no axe was found in your inventory.");
+                        sleep(5000);
+                        return;
+                    }
+                    axe = Rs2Inventory.get("axe").name;
                 }
 
-                axe = Rs2Inventory.get("axe").name;
 
                 boolean wintertodtRespawning = Rs2Widget.hasWidget("returns in");
                 boolean isWintertodtAlive = Rs2Widget.hasWidget("Wintertodt's Energy");
                 GameObject brazier = Rs2GameObject.findObject(BRAZIER_29312, config.brazierLocation().getOBJECT_BRAZIER_LOCATION());
-                boolean hasFixAction = brazier != null && Rs2GameObject.hasAction(Rs2GameObject.convertGameObjectToObjectComposition(brazier), "fix");
                 GameObject fireBrazier = Rs2GameObject.findObject(ObjectID.BURNING_BRAZIER_29314, config.brazierLocation().getOBJECT_BRAZIER_LOCATION());
-                boolean needBanking = !Rs2Inventory.hasItemAmount(config.food().getName(), config.foodAmount(), false, true)
-                        && Microbot.getClient().getBoostedSkillLevel(Skill.HITPOINTS) < config.hpTreshhold();
+                boolean playerIsLowHealth = (double) (Microbot.getClient().getBoostedSkillLevel(Skill.HITPOINTS) * 100) / Microbot.getClient().getRealSkillLevel(Skill.HITPOINTS) <= config.hpTreshhold();
+                boolean needBanking = !Rs2Inventory.hasItemAmount(config.food().getName(), config.foodAmount(), false, false)
+                        && playerIsLowHealth;
                 Widget wintertodtHealthbar = Rs2Widget.getWidget(25952276);
 
                 if (wintertodtHealthbar != null && isWintertodtAlive) {
@@ -90,13 +93,17 @@ public class MWintertodtScript extends Script {
                 shouldEat();
                 dodgeOrbDamage();
 
-                if (!isWintertodtAlive) {
-                    if (state != State.ENTER_ROOM && state != State.WAITING && state != State.BANKING) {
-                        setLockState(State.GLOBAL, false);
-                        changeState(State.BANKING);
+                if (!needBanking) {
+                    if (!isWintertodtAlive) {
+                        if (state != State.ENTER_ROOM && state != State.WAITING && state != State.BANKING) {
+                            setLockState(State.GLOBAL, false);
+                            changeState(State.BANKING);
+                        }
+                    } else {
+                        handleMainLoop();
                     }
                 } else {
-                    handleMainLoop();
+                    setLockState(State.BANKING, false);
                 }
 
                 //todo: hasFixAction is not working?
@@ -107,9 +114,10 @@ public class MWintertodtScript extends Script {
 
                 switch (state) {
                     case BANKING:
-                        if (handleBankLogic(config)) return;
-
-                        changeState(State.ENTER_ROOM);
+                        if (!handleBankLogic(config)) return;
+                        if (Rs2Player.isFullHealth() && Rs2Inventory.hasItemAmount(config.food().getName(), config.foodAmount(), false, true)) {
+                            changeState(State.ENTER_ROOM);
+                        }
                         break;
                     case ENTER_ROOM:
                         if (!wintertodtRespawning && !isWintertodtAlive) {
@@ -244,7 +252,6 @@ public class MWintertodtScript extends Script {
     }
 
     private boolean shouldChopRoots() {
-        //issue here
         if (Rs2Inventory.isFull()) {
             if (state == State.CHOP_ROOTS) {
                 setLockState(State.CHOP_ROOTS, false);
@@ -336,7 +343,7 @@ public class MWintertodtScript extends Script {
     }
 
     private boolean handleBankLogic(MWintertodtConfig config) {
-        if (!Rs2Player.isFullHealth() && Rs2Inventory.hasItem(config.food().getName(), true)) {
+        if (!Rs2Player.isFullHealth() && Rs2Inventory.hasItem(config.food().getName(), false)) {
             eatAt(99);
             return true;
         }
@@ -360,10 +367,10 @@ public class MWintertodtScript extends Script {
 //            Rs2Bank.withdrawX(true, "hammer", 1);
 //        }
         if (!Rs2Equipment.hasEquipped(ItemID.BRUMA_TORCH)) {
-            Rs2Bank.withdrawX(true, "tinderbox", 1);
+            Rs2Bank.withdrawX(true, "tinderbox", 1, true);
         }
         if (config.fletchRoots()) {
-            Rs2Bank.withdrawX(true, "knife", 1);
+            Rs2Bank.withdrawX(true, "knife", 1, true);
         }
         if (config.axeInInventory()) {
             Rs2Bank.withdrawX(true, axe, 1);
@@ -373,8 +380,7 @@ public class MWintertodtScript extends Script {
             Microbot.pauseAllScripts = true;
             return true;
         }
-        Rs2Bank.withdrawX(config.food().getName(), config.foodAmount() - foodCount);
-        sleepUntil(() -> Rs2Inventory.hasItemAmount(config.food().getName(), config.foodAmount(), false, true));
-        return false;
+        Rs2Bank.withdrawX(config.food().getId(), config.foodAmount() - foodCount);
+        return sleepUntilTrue(() -> Rs2Inventory.hasItemAmount(config.food().getName(), config.foodAmount(), false, true), 100, 5000);
     }
 }

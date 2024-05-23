@@ -25,11 +25,11 @@ import static net.runelite.client.plugins.microbot.util.Global.*;
 
 public class Rs2GrandExchange {
 
-    public static final int GRAND_EXCHANGE_OFFER_CONTAINER_QTY_1 = 30474265;
     public static final int GRAND_EXCHANGE_OFFER_CONTAINER_QTY_10 = 30474265;
     public static final int GRAND_EXCHANGE_OFFER_CONTAINER_QTY_100 = 30474265;
     public static final int GRAND_EXCHANGE_OFFER_CONTAINER_QTY_1000 = 30474265;
     public static final int GRAND_EXCHANGE_OFFER_CONTAINER_QTY_X = 30474265;
+    public static final int GRAND_EXCHANGE_OFFER_CONTAINER_QTY_1 = 30474265;
     public static final int COLLECT_BUTTON = 30474246;
 
     /**
@@ -44,6 +44,7 @@ public class Rs2GrandExchange {
 
     /**
      * check if the grand exchange screen is open
+     *
      * @return
      */
     public static boolean isOpen() {
@@ -53,6 +54,7 @@ public class Rs2GrandExchange {
 
     /**
      * check if the ge offerscreen is open
+     *
      * @return
      */
     public static boolean isOfferScreenOpen() {
@@ -62,6 +64,7 @@ public class Rs2GrandExchange {
 
     /**
      * Opens the grand exchange
+     *
      * @return
      */
     public static boolean openExchange() {
@@ -92,10 +95,10 @@ public class Rs2GrandExchange {
     }
 
     /**
-     * @param itemName name of the item
+     * @param itemName   name of the item
      * @param searchTerm search term
-     * @param price price of the item to buy
-     * @param quantity quantity of item to buy
+     * @param price      price of the item to buy
+     * @param quantity   quantity of item to buy
      * @return true if item has been bought succesfully
      */
     public static boolean buyItem(String itemName, String searchTerm, int price, int quantity) {
@@ -165,9 +168,10 @@ public class Rs2GrandExchange {
 
     /**
      * Sell item to the grand exchange
+     *
      * @param itemName name of the item to sell
      * @param quantity quantity of the item to sell
-     * @param price price of the item to sell
+     * @param price    price of the item to sell
      * @return
      */
     public static boolean sellItem(String itemName, int quantity, int price) {
@@ -217,8 +221,41 @@ public class Rs2GrandExchange {
         return false;
     }
 
+    public static boolean sellItemUnder5Percent(String itemName, int quantity) {
+        try {
+            if (!Rs2Inventory.hasItem(itemName)) return false;
+
+            if (!isOpen()) {
+                openExchange();
+            }
+            Pair<GrandExchangeSlots, Integer> slot = getAvailableSlot();
+            Widget sellOffer = getOfferSellButton(slot.getLeft());
+
+            if (sellOffer == null) return false;
+
+            Microbot.getMouse().click(sellOffer.getBounds());
+            sleepUntil(Rs2GrandExchange::isOfferTextVisible, 5000);
+            Rs2Inventory.interact(itemName, "Offer");
+            sleepUntil(() -> Rs2Widget.hasWidget("actively traded price"));
+            sleep(300, 600);
+            Widget pricePerItemButton5Percent = getPricePerItemButton_Minus_5Percent();
+            if (pricePerItemButton5Percent != null) {
+                Microbot.getMouse().click(pricePerItemButton5Percent.getBounds());
+                Microbot.getMouse().click(getConfirm().getBounds());
+                sleepUntil(() -> !isOfferTextVisible());
+                return true;
+            } else {
+                System.out.println("unable to find widget setprice.");
+            }
+        } catch (Exception ex) {
+            System.out.println(ex.getMessage());
+        }
+        return false;
+    }
+
     /**
      * Collect all the grand exchange slots to the bank or inventory
+     *
      * @param collectToBank
      * @return
      */
@@ -449,8 +486,12 @@ public class Rs2GrandExchange {
         return Arrays.stream(Microbot.getClient().getGrandExchangeOffers()).anyMatch(x -> x.getState() == GrandExchangeOfferState.BOUGHT);
     }
 
+    public static boolean hasSoldOffer() {
+        return Arrays.stream(Microbot.getClient().getGrandExchangeOffers()).anyMatch(x -> x.getState() == GrandExchangeOfferState.SOLD);
+    }
+
     private static int getMaxSlots() {
-        return Rs2Player.isMember() ? 8: 3;
+        return Rs2Player.isMember() ? 8 : 3;
     }
 
     public static boolean walkToGrandExchange() {
