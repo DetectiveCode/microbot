@@ -4,25 +4,25 @@ import lombok.Getter;
 import net.runelite.api.Item;
 import net.runelite.api.ItemComposition;
 import net.runelite.api.ParamID;
-import net.runelite.api.widgets.ComponentID;
-import net.runelite.api.widgets.Widget;
 import net.runelite.client.plugins.microbot.Microbot;
-import net.runelite.client.plugins.microbot.util.widget.Rs2Widget;
 
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 
 public class Rs2Item {
+    @Getter
     public  int id;
     public  int quantity;
     @Getter
     public int slot = -1;
+    @Getter
     public String name;
     @Getter
     String[] inventoryActions;
     @Getter
     List<String> equipmentActions = new ArrayList();
+    @Getter
     boolean isStackable;
     boolean isNoted;
     @Getter
@@ -48,10 +48,7 @@ public class Rs2Item {
         this.isTradeable = this.isNoted
                 ? Microbot.getClientThread().runOnClientThread(() -> Microbot.getClient().getItemDefinition(this.id - 1)).isTradeable()
                 : itemComposition.isTradeable();
-        Widget widget = Rs2Widget.getWidget(ComponentID.INVENTORY_CONTAINER).getChild(slot);
-        if (widget != null) {
-            this.inventoryActions = Rs2Widget.getWidget(ComponentID.INVENTORY_CONTAINER).getChild(slot).getActions();
-        }
+        this.inventoryActions = itemComposition.getInventoryActions();
         addEquipmentActions(itemComposition);
     }
 
@@ -68,5 +65,32 @@ public class Rs2Item {
                 this.equipmentActions.add("");
             }
         }
+    }
+
+    public int getPrice() {
+        return Microbot.getClientThread().runOnClientThread(() ->
+                Microbot.getItemManager().getItemPrice(id) * quantity);
+    }
+
+    @Override
+    public int hashCode() {
+        final int prime = 31;
+        int result = 1;
+        result = prime * result + id;
+        return result;
+    }
+
+    @Override
+    public boolean equals(Object obj) {
+        if (this == obj)
+            return true;
+        if (obj == null)
+            return false;
+        if (getClass() != obj.getClass())
+            return false;
+        Rs2Item other = (Rs2Item) obj;
+        if (id != other.id)
+            return false;
+        return true;
     }
 }

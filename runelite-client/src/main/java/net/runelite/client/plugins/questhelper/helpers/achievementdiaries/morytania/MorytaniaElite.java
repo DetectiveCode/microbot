@@ -24,15 +24,14 @@
  */
 package net.runelite.client.plugins.questhelper.helpers.achievementdiaries.morytania;
 
-import net.runelite.client.plugins.questhelper.ItemCollections;
-import net.runelite.client.plugins.questhelper.QuestDescriptor;
-import net.runelite.client.plugins.questhelper.QuestHelperQuest;
-import net.runelite.client.plugins.questhelper.Zone;
-import net.runelite.client.plugins.questhelper.banktab.BankSlotIcons;
+import net.runelite.api.*;
+import net.runelite.api.coords.WorldPoint;
+import net.runelite.client.plugins.questhelper.bank.banktab.BankSlotIcons;
+import net.runelite.client.plugins.questhelper.collections.ItemCollections;
 import net.runelite.client.plugins.questhelper.panel.PanelDetails;
 import net.runelite.client.plugins.questhelper.questhelpers.ComplexStateQuestHelper;
+import net.runelite.client.plugins.questhelper.questinfo.QuestHelperQuest;
 import net.runelite.client.plugins.questhelper.requirements.Requirement;
-import net.runelite.client.plugins.questhelper.requirements.ZoneRequirement;
 import net.runelite.client.plugins.questhelper.requirements.item.ItemRequirement;
 import net.runelite.client.plugins.questhelper.requirements.item.ItemRequirements;
 import net.runelite.client.plugins.questhelper.requirements.player.SkillRequirement;
@@ -41,20 +40,17 @@ import net.runelite.client.plugins.questhelper.requirements.quest.QuestRequireme
 import net.runelite.client.plugins.questhelper.requirements.util.LogicType;
 import net.runelite.client.plugins.questhelper.requirements.util.Spellbook;
 import net.runelite.client.plugins.questhelper.requirements.var.VarplayerRequirement;
+import net.runelite.client.plugins.questhelper.requirements.zone.Zone;
+import net.runelite.client.plugins.questhelper.requirements.zone.ZoneRequirement;
 import net.runelite.client.plugins.questhelper.rewards.ItemReward;
 import net.runelite.client.plugins.questhelper.rewards.UnlockReward;
 import net.runelite.client.plugins.questhelper.steps.*;
-import net.runelite.api.*;
-import net.runelite.api.coords.WorldPoint;
 
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 
-@QuestDescriptor(
-	quest = QuestHelperQuest.MORYTANIA_ELITE
-)
 public class MorytaniaElite extends ComplexStateQuestHelper
 {
 	// Items required
@@ -85,8 +81,7 @@ public class MorytaniaElite extends ComplexStateQuestHelper
 	@Override
 	public QuestStep loadStep()
 	{
-		loadZones();
-		setupRequirements();
+		initializeRequirements();
 		setupSteps();
 
 		ConditionalStep doElite = new ConditionalStep(this, claimReward);
@@ -117,7 +112,7 @@ public class MorytaniaElite extends ComplexStateQuestHelper
 	}
 
 	@Override
-	public void setupRequirements()
+	protected void setupRequirements()
 	{
 		notBareHandShark = new VarplayerRequirement(1181, false, 3);
 		notCremateShade = new VarplayerRequirement(1181, false, 4);
@@ -191,7 +186,8 @@ public class MorytaniaElite extends ComplexStateQuestHelper
 		bareHandBarb = new ItemRequirement("Completed the Barbarian bare-handed fishing", 1, -1);
 	}
 
-	public void loadZones()
+	@Override
+	protected void setupZones()
 	{
 		canifisBank = new Zone(new WorldPoint(3509, 3483, 0), new WorldPoint(3514, 3476, 0));
 		slayer2 = new Zone(new WorldPoint(3404, 3580, 1), new WorldPoint(3453, 3530, 1));
@@ -211,7 +207,7 @@ public class MorytaniaElite extends ComplexStateQuestHelper
 		cremateShade = new ObjectStep(this, ObjectID.FUNERAL_PYRE, new WorldPoint(3500, 3266, 0),
 			"Place the pyre logs and shade remains on the funeral pyre and light them with a tinderbox", tinderbox,
 			shadeRemains, magicRedwoodPyreLogs);
-		cremateShade.addAlternateObjects(ObjectID.FUNERAL_PYRE_28865, ObjectID.FUNERAL_PYRE_4099);
+		cremateShade.addAlternateObjects(ObjectID.REDWOOD_PYRE, ObjectID.MAGIC_PYRE);
 
 		bareHandShark = new NpcStep(this, NpcID.FISHING_SPOT_4476, new WorldPoint(3479, 3189, 0),
 			"Bare hand fish a shark in Burgh de Rott.");

@@ -23,6 +23,12 @@ public class Rs2Reflection {
     static String animationField = null;
     static Method doAction = null;
 
+    /**
+     * sequence maps to an actor animation
+     * actor can be an npc/player
+     */
+    static int sequence = 1036457443;
+
     @SneakyThrows
     public static int getAnimation(NPC npc) {
         if (npc == null) {
@@ -45,7 +51,7 @@ public class Rs2Reflection {
                 }
                 int value = declaredField.getInt(npc);
                 declaredField.setInt(npc, 4795789);
-                if (npc.getAnimation() == 1049413981 * 4795789) {
+                if (npc.getAnimation() == sequence * 4795789) {
                     animationField = declaredField.getName();
                     declaredField.setInt(npc, value);
                     declaredField.setAccessible(false);
@@ -60,7 +66,7 @@ public class Rs2Reflection {
         }
         Field animation = npc.getClass().getSuperclass().getDeclaredField(animationField);
         animation.setAccessible(true);
-        int anim = animation.getInt(npc) * 1049413981;
+        int anim = animation.getInt(npc) * sequence;
         animation.setAccessible(false);
         return anim;
     }
@@ -82,10 +88,11 @@ public class Rs2Reflection {
 
     @SneakyThrows
     public static void setItemId(MenuEntry menuEntry, int itemId) throws IllegalAccessException, InvocationTargetException {
-        Arrays.stream(menuEntry.getClass().getMethods())
-                .filter(x -> x.getReturnType().getName().equals("void") && x.getParameters().length > 0 && x.getParameters()[0].getType().getName().equals("int"))
-                .collect(Collectors.toList())
-                .get(0)
+        var list =  Arrays.stream(menuEntry.getClass().getMethods())
+                .filter(x -> x.getName().equals("setItemId"))
+                .collect(Collectors.toList());
+
+         list.get(0)
                 .invoke(menuEntry, itemId); //use the setItemId method through reflection
     }
 

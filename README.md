@@ -1,32 +1,46 @@
+![image](https://github.com/user-attachments/assets/7c08e053-c84f-41f8-bc97-f55130100419)
+
+
+
 # Microbot
 Microbot is an opensource automated oldschool runescape client based on runelite. It uses a plugin system to enable scripting. Here is a youtube channel showing off some of the scripts
 
-[Youtube Channel](https://www.youtube.com/channel/UCEj_7N5OPJkdDi0VTMOJOpw)
+## Youtube
+
+[![image](https://github.com/user-attachments/assets/f15ec853-9b92-474e-a269-9a984e8bb792)](https://www.youtube.com/channel/UCEj_7N5OPJkdDi0VTMOJOpw)
+
+## Discord
+
+[![Discord Banner 1](https://discord.com/api/guilds/1087718903985221642/widget.png?style=banner1)](https://discord.gg/zaGrfqFEWE)
+
  
 If you have any questions, please join our [Discord](https://discord.gg/zaGrfqFEWE) server.
+
+
+## ☕ Buy Me a Coffee
+
+If you enjoy my open source work and would like to support me, consider buying me a coffee! Your support helps me stay caffeinated and motivated to keep improving and creating awesome projects.
+
+[![Buy Me a Coffee](https://img.shields.io/badge/Buy%20Me%20a%20Coffee-donate-yellow)](https://www.paypal.com/paypalme/MicrobotBE?country.x=BE)
+
+Thank you for your support! 😊
 
 # I Want To Bot
 
 ## Non jagex account
 
-Here is a youtube video on how to setup the bot from scratch
+Here is a youtube video on how to setup the bot from scratch for **NON-JAGEX ACCOUNTS**
 
 https://www.youtube.com/watch?v=EbtdZnxq5iw
 
 ## Jagex Account
 
-If you don't have java installed yet, watch the youtube video: https://www.youtube.com/watch?v=EbtdZnxq5iw
+Follow the runelite wiki for setting up jagex accounts: https://github.com/runelite/runelite/wiki/Using-Jagex-Accounts
+
+After you've done setting it up follow these two steps:
 
 1) Simply login with the jagex launcher for the first time. This will create a token for your account. Close everything after succesfully login in through the jagex launcher. 
-2) Open the shaded.jar from microbot and this should prompt you with the jagex account to login.
-
-## Jagex Launcher
-
-If you don't have java installed yet, watch the youtube video: https://www.youtube.com/watch?v=EbtdZnxq5iw
-
-Simply replace the Official RuneLite.jar with the microbot.jar and make sure the name is the same!! After that you can start up the jagex launcher and select runelite, this will startup microbot.
-
-![img_2.png](img_2.png)
+2) Open the microbot.jar from microbot and this should prompt you with the jagex account to login.
 
 # I Want To Develop
 
@@ -34,8 +48,13 @@ Simply replace the Official RuneLite.jar with the microbot.jar and make sure the
 
 Make sure to follow this guide if it's your first time running the project
 
-https://github.com/runelite/runelite/wiki/Building-with-IntelliJ-IDEA
+[https://github.com/runelite/runelite/wiki/Building-with-IntelliJ-IDEA](https://github.com/chsami/microbot/wiki/Building-with-IntelliJ-IDEA)
 
+## Microbot ChatGPT Chatbot
+
+[![image](https://github.com/user-attachments/assets/92adb50f-1500-44c0-a069-ff976cccd317)](https://chatgpt.com/g/g-LM0fGeeXB-microbot-documentation)
+
+Use this AI Chatbot to learn how to write scripts in [Microbot GPT](https://chatgpt.com/g/g-LM0fGeeXB-microbot-documentation)
 
 ## Project Layout
 
@@ -48,7 +67,6 @@ If you can't find a specific thing in a utility class you can always call the Mi
 ```java 
 Microbot.getClient().getLocalPlayer().getWorldLocation()
 ```
-
 
 ![img.png](img.png)
 
@@ -119,6 +137,10 @@ overlayManager.add(exampleOverlay);
 exampleScript.run(config);
 }
 ```
+
+Credits to runelite for making all of this possible <3
+
+https://github.com/runelite/runelite
 
 ### License
 

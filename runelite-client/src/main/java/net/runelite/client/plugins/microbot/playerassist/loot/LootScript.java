@@ -1,78 +1,168 @@
 package net.runelite.client.plugins.microbot.playerassist.loot;
 
-import net.runelite.api.ItemComposition;
-import net.runelite.api.Perspective;
-import net.runelite.api.coords.LocalPoint;
-import net.runelite.api.events.ItemSpawned;
+import lombok.extern.slf4j.Slf4j;
 import net.runelite.client.plugins.microbot.Microbot;
 import net.runelite.client.plugins.microbot.Script;
 import net.runelite.client.plugins.microbot.playerassist.PlayerAssistConfig;
-import net.runelite.client.plugins.microbot.util.Global;
-import net.runelite.client.plugins.microbot.util.camera.Rs2Camera;
+import net.runelite.client.plugins.microbot.util.combat.Rs2Combat;
+import net.runelite.client.plugins.microbot.util.grounditem.LootingParameters;
 import net.runelite.client.plugins.microbot.util.grounditem.Rs2GroundItem;
 import net.runelite.client.plugins.microbot.util.inventory.Rs2Inventory;
-import net.runelite.client.plugins.microbot.util.player.Rs2Player;
 
-import java.awt.*;
-import java.util.Arrays;
 import java.util.concurrent.TimeUnit;
 
+@Slf4j
 public class LootScript extends Script {
 
-    private String[] lootItems;
 
     public LootScript() {
 
     }
 
-    public void run(ItemSpawned itemSpawned) {
-        mainScheduledFuture = scheduledExecutorService.schedule((() -> {
-            try {
-                if (!Microbot.isLoggedIn()) return;
-                if (!super.run()) return;
-                if (Microbot.getClientThread().runOnClientThread(Rs2Inventory::isFull)) return;
-                final ItemComposition itemComposition = Microbot.getClientThread().runOnClientThread(() -> Microbot.getClient().getItemDefinition(itemSpawned.getItem().getId()));
-                for (String item : lootItems) {
-                    LocalPoint itemLocation = itemSpawned.getTile().getLocalLocation();
-                    int distance = itemSpawned.getTile().getWorldLocation().distanceTo(Microbot.getClient().getLocalPlayer().getWorldLocation());
-                    if (item.equalsIgnoreCase(itemComposition.getName()) && distance < 14) {
-                        Rs2GroundItem.interact(item, "Take");
-                        Microbot.pauseAllScripts = true;
-                        sleepUntilOnClientThread(() -> Microbot.getClient().getLocalPlayer().getWorldLocation() == itemSpawned.getTile().getWorldLocation(), 5000);
-                        Microbot.pauseAllScripts = false;
-                    }
-                }
-            } catch(Exception ex) {
-                System.out.println(ex.getMessage());
-            }
-        }), 2000, TimeUnit.MILLISECONDS);
-    }
 
     public boolean run(PlayerAssistConfig config) {
-        mainScheduledFuture = scheduledExecutorService.scheduleWithFixedDelay((() -> {
+        mainScheduledFuture = scheduledExecutorService.scheduleWithFixedDelay(() -> {
             if (!super.run()) return;
-            if (config.toggleLootArrows()) {
-                for (String lootItem : Arrays.asList("bronze arrow", "iron arrow", "steel arrow", "mithril arrow", "adamant arrow", "rune arrow", "dragon arrow")) {
-                    if (Rs2GroundItem.loot(lootItem, 13, 14))
-                        break;
-                }
-            }
+            if (!Microbot.isLoggedIn()) return;
+            if (Rs2Inventory.isFull() || Rs2Inventory.getEmptySlots() <= config.minFreeSlots() || Rs2Combat.inCombat())
+                return;
+
+            lootArrows(config);
+
             if (!config.toggleLootItems()) return;
-            for (String specialItem : Arrays.asList("Giant key")) {
-                if (Rs2GroundItem.loot(specialItem, 13, 14))
-                    break;
-            }
-            boolean result = Rs2GroundItem.lootItemBasedOnValue(config.minPriceOfItemsToLoot(), config.maxPriceOfItemsToLoot(), 14);
-            if (result) {
-                Rs2Player.waitForWalking();
+
+            lootBones(config);
+            lootAshes(config);
+            lootRunes(config);
+            lootCoins(config);
+            lootUntradeableItems(config);
+            lootItemsByValue(config);
+
+        }, 0, 200, TimeUnit.MILLISECONDS);
+        return true;
+    }
+
+    private void lootArrows(PlayerAssistConfig config) {
+        if (config.toggleLootArrows()) {
+            LootingParameters arrowParams = new LootingParameters(
+                    config.attackRadius(),
+                    1,
+                    14,
+                    config.minFreeSlots(),
+                    config.toggleDelayedLooting(),
+                    config.toggleOnlyLootMyItems(),
+                    "arrow"
+            );
+            if (Rs2GroundItem.lootItemsBasedOnNames(arrowParams)) {
                 Microbot.pauseAllScripts = false;
             }
-        }), 0, 2000, TimeUnit.MILLISECONDS);
-        return true;
+        }
+    }
+
+    private void lootBones(PlayerAssistConfig config) {
+        if (config.toggleBuryBones()) {
+            LootingParameters bonesParams = new LootingParameters(
+                    config.attackRadius(),
+                    1,
+                    1,
+                    config.minFreeSlots(),
+                    config.toggleDelayedLooting(),
+                    config.toggleOnlyLootMyItems(),
+                    "bones"
+            );
+            if (Rs2GroundItem.lootItemsBasedOnNames(bonesParams)) {
+                Microbot.pauseAllScripts = false;
+            }
+        }
+    }
+
+    private void lootAshes(PlayerAssistConfig config) {
+        if (config.toggleScatter()) {
+            LootingParameters ashesParams = new LootingParameters(
+                    config.attackRadius(),
+                    1,
+                    1,
+                    config.minFreeSlots(),
+                    config.toggleDelayedLooting(),
+                    config.toggleOnlyLootMyItems(),
+                    " ashes"
+            );
+            if (Rs2GroundItem.lootItemsBasedOnNames(ashesParams)) {
+                Microbot.pauseAllScripts = false;
+            }
+        }
+    }
+
+    // loot runes
+    private void lootRunes(PlayerAssistConfig config) {
+        if (config.toggleLootRunes()) {
+            LootingParameters runesParams = new LootingParameters(
+                    config.attackRadius(),
+                    1,
+                    1,
+                    config.minFreeSlots(),
+                    config.toggleDelayedLooting(),
+                    config.toggleOnlyLootMyItems(),
+                    " rune"
+            );
+            if (Rs2GroundItem.lootItemsBasedOnNames(runesParams)) {
+                Microbot.pauseAllScripts = false;
+            }
+        }
+    }
+
+    // loot coins
+    private void lootCoins(PlayerAssistConfig config) {
+        if (config.toggleLootCoins()) {
+            LootingParameters coinsParams = new LootingParameters(
+                    config.attackRadius(),
+                    1,
+                    1,
+                    config.minFreeSlots(),
+                    config.toggleDelayedLooting(),
+                    config.toggleOnlyLootMyItems(),
+                    "coins"
+            );
+            if (Rs2GroundItem.lootCoins(coinsParams)) {
+                Microbot.pauseAllScripts = false;
+            }
+        }
+    }
+
+    // loot untreadable items
+    private void lootUntradeableItems(PlayerAssistConfig config) {
+        if (config.toggleLootUntradables()) {
+            LootingParameters untradeableItemsParams = new LootingParameters(
+                    config.attackRadius(),
+                    1,
+                    1,
+                    config.minFreeSlots(),
+                    config.toggleDelayedLooting(),
+                    config.toggleOnlyLootMyItems(),
+                    "untradeable"
+            );
+            if (Rs2GroundItem.lootUntradables(untradeableItemsParams)) {
+                Microbot.pauseAllScripts = false;
+            }
+        }
+    }
+
+    private void lootItemsByValue(PlayerAssistConfig config) {
+        LootingParameters valueParams = new LootingParameters(
+                config.minPriceOfItemsToLoot(),
+                config.maxPriceOfItemsToLoot(),
+                config.attackRadius(),
+                1,
+                config.minFreeSlots(),
+                config.toggleDelayedLooting(),
+                config.toggleOnlyLootMyItems()
+        );
+        if (Rs2GroundItem.lootItemBasedOnValue(valueParams)) {
+            Microbot.pauseAllScripts = false;
+        }
     }
 
     public void shutdown() {
         super.shutdown();
-        lootItems = null;
     }
 }

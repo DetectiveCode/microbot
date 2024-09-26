@@ -3,7 +3,6 @@ package net.runelite.client.plugins.microbot.fletching;
 import com.google.inject.Provides;
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.Client;
-import net.runelite.api.Skill;
 import net.runelite.api.events.WidgetLoaded;
 import net.runelite.client.Notifier;
 import net.runelite.client.callback.ClientThread;
@@ -17,8 +16,6 @@ import net.runelite.client.ui.overlay.OverlayManager;
 
 import javax.inject.Inject;
 import java.awt.*;
-
-import static net.runelite.client.plugins.natepainthelper.Info.*;
 
 @PluginDescriptor(
         name = PluginDescriptor.Mocrosoft + "Fletcher",
@@ -46,7 +43,6 @@ public class FletchingPlugin extends Plugin {
     @Inject
     private FletchingOverlay fletchingOverlay;
 
-    @Inject
     FletchingScript fletchingScript;
 
 
@@ -57,12 +53,10 @@ public class FletchingPlugin extends Plugin {
         Microbot.setClientThread(clientThread);
         Microbot.setNotifier(notifier);
         Microbot.setMouse(new VirtualMouse());
-        expstarted = Microbot.getClient().getSkillExperience(Skill.FLETCHING);
-        startinglevel = Microbot.getClient().getRealSkillLevel(Skill.FLETCHING);
-        timeBegan = System.currentTimeMillis();
         if (overlayManager != null) {
             overlayManager.add(fletchingOverlay);
         }
+        fletchingScript = new FletchingScript();
         fletchingScript.run(config);
     }
 

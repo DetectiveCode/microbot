@@ -9,12 +9,6 @@ import net.runelite.client.plugins.microbot.wintertodt.enums.Brazier;
 
 @ConfigGroup("wintertodt")
 public interface MWintertodtConfig extends Config {
-    //final int FOOD_AMT = 6;
-    //    final String FOOD_TYPE = "monkfish";
-    //    final int HP_TRESHOLD = 30;
-    //    final boolean FLETCH_LOGS = true;
-
-
     @ConfigSection(
             name = "General",
             description = "General",
@@ -68,16 +62,16 @@ public interface MWintertodtConfig extends Config {
         return true;
     }
 
-//    @ConfigItem(
-//            keyName = "FixBrazier",
-//            name = "Fix Brazier",
-//            description = "The Wintertodt will occasionally break the braziers; they must be repaired again before use. This rewards 4x the player's Construction level in experience, provided they own a player-owned house.",
-//            position = 3,
-//            section = generalSection
-//    )
-//    default boolean fixBrazier() {
-//        return true;
-//    }
+    @ConfigItem(
+            keyName = "FixBrazier",
+            name = "Fix Brazier",
+            description = "The Wintertodt will occasionally break the braziers; they must be repaired again before use. This rewards 4x the player's Construction level in experience, provided they own a player-owned house.",
+            position = 3,
+            section = generalSection
+    )
+    default boolean fixBrazier() {
+        return true;
+    }
 
     @ConfigItem(
             keyName = "OpenCrates",
@@ -124,10 +118,21 @@ public interface MWintertodtConfig extends Config {
     }
 
     @ConfigItem(
+            keyName = "MinFood",
+            name = "Min Food",
+            description = "Minimum food to start a new game",
+            position = 3,
+            section = foodSection
+    )
+    default int minFood() {
+        return 2;
+    }
+
+    @ConfigItem(
             keyName = "Eat at %",
             name = "Eat at %",
             description = "Eat at specific percentage health.",
-            position = 3,
+            position = 4,
             section = foodSection
     )
     default int eatAt() {
@@ -138,7 +143,7 @@ public interface MWintertodtConfig extends Config {
             keyName = "Hitpoints Tresshold",
             name = "HP % to run away",
             description = "Runs to the bank if a specific health treshhold is reached and the player does not have any food in their inventory.",
-            position = 4,
+            position = 5,
             section = foodSection
     )
     default int hpTreshhold() {

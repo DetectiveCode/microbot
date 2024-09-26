@@ -1,12 +1,13 @@
 package net.runelite.client.plugins.microbot;
 
+import com.google.common.base.Stopwatch;
 import lombok.Getter;
 import net.runelite.api.coords.WorldPoint;
 import net.runelite.api.events.WidgetLoaded;
 import net.runelite.api.widgets.InterfaceID;
 import net.runelite.api.widgets.Widget;
-import net.runelite.client.plugins.microbot.shortestpath.ShortestPathPlugin;
 import net.runelite.client.plugins.microbot.globval.enums.InterfaceTab;
+import net.runelite.client.plugins.microbot.shortestpath.ShortestPathPlugin;
 import net.runelite.client.plugins.microbot.util.inventory.Rs2Inventory;
 import net.runelite.client.plugins.microbot.util.keyboard.Rs2Keyboard;
 import net.runelite.client.plugins.microbot.util.math.Random;
@@ -24,7 +25,7 @@ import java.util.function.BooleanSupplier;
 
 public abstract class Script implements IScript {
 
-    protected ScheduledExecutorService scheduledExecutorService = Executors.newScheduledThreadPool(100);
+    protected ScheduledExecutorService scheduledExecutorService = Executors.newScheduledThreadPool(10);
     protected ScheduledFuture<?> scheduledFuture;
     public ScheduledFuture<?> mainScheduledFuture;
     public static boolean hasLeveledUp = false;
@@ -39,6 +40,7 @@ public abstract class Script implements IScript {
 
     public void sleep(int time) {
         try {
+            Microbot.log("Sleeping for " + time);
             Thread.sleep(time);
         } catch (InterruptedException e) {
             System.out.println(e.getMessage());
@@ -53,19 +55,6 @@ public abstract class Script implements IScript {
             System.out.println(e.getMessage());
         }
     }
-
-    public ScheduledFuture<?> keepExecuteUntil(Runnable callback, BooleanSupplier awaitedCondition, int time) {
-        scheduledFuture = scheduledExecutorService.scheduleWithFixedDelay(() -> {
-            if (awaitedCondition.getAsBoolean()) {
-                scheduledFuture.cancel(true);
-                scheduledFuture = null;
-                return;
-            }
-            callback.run();
-        }, 0, time, TimeUnit.MILLISECONDS);
-        return scheduledFuture;
-    }
-
     public boolean sleepUntil(BooleanSupplier awaitedCondition) {
         return sleepUntil(awaitedCondition, 5000);
     }
@@ -77,6 +66,19 @@ public abstract class Script implements IScript {
             done = awaitedCondition.getAsBoolean();
         } while (!done && System.currentTimeMillis() - startTime < time);
         return done;
+    }
+
+
+    public boolean sleepUntil(BooleanSupplier awaitedCondition, BooleanSupplier resetCondition, int timeout) {
+        final Stopwatch watch = Stopwatch.createStarted();
+        while (!awaitedCondition.getAsBoolean() && watch.elapsed(TimeUnit.MILLISECONDS) < timeout) {
+            sleep(100);
+            if (resetCondition.getAsBoolean() && Microbot.isLoggedIn()) {
+                watch.reset();
+                watch.start();
+            }
+        }
+        return awaitedCondition.getAsBoolean();
     }
 
     public void sleepUntilOnClientThread(BooleanSupplier awaitedCondition) {
@@ -96,39 +98,39 @@ public abstract class Script implements IScript {
     public void shutdown() {
         if (mainScheduledFuture != null && !mainScheduledFuture.isDone()) {
             mainScheduledFuture.cancel(true);
-            Microbot.pauseAllScripts = false;
             ShortestPathPlugin.exit();
             if (Microbot.getClientThread().scheduledFuture != null)
                 Microbot.getClientThread().scheduledFuture.cancel(true);
             initialPlayerLocation = null;
+            Microbot.pauseAllScripts = false;
+            Microbot.getSpecialAttackConfigs().reset();
         }
     }
 
     public boolean run() {
         hasLeveledUp = false;
-        if (Microbot.enableAutoRunOn)
-            Rs2Player.toggleRunEnergy(true);
-
-        if (Rs2Widget.getWidget(15269889) != null) { //levelup congratulations interface
-            Rs2Keyboard.keyPress(KeyEvent.VK_SPACE);
-        }
-        Widget clickHereToPlayButton = Rs2Widget.getWidget(24772680); //on login screen
-        if (clickHereToPlayButton != null && !Microbot.getClientThread().runOnClientThread(clickHereToPlayButton::isHidden)) {
-            Rs2Widget.clickWidget(clickHereToPlayButton.getId());
-        }
+        Microbot.getSpecialAttackConfigs().useSpecWeapon();
 
         if (Microbot.pauseAllScripts)
             return false;
 
-        boolean hasRunEnergy = Microbot.getClient().getEnergy() > 4000;
-
-        if (!hasRunEnergy && useStaminaPotsIfNeeded) {
-            Rs2Inventory.interact("Stamina potion", "drink");
-        }
-
         if (Microbot.isLoggedIn()) {
-            if (initialPlayerLocation == null)
-                initialPlayerLocation = Microbot.getClient().getLocalPlayer().getWorldLocation();
+            if (Microbot.enableAutoRunOn)
+                Rs2Player.toggleRunEnergy(true);
+
+            if (Rs2Widget.getWidget(15269889) != null) { //levelup congratulations interface
+                Rs2Keyboard.keyPress(KeyEvent.VK_SPACE);
+            }
+            Widget clickHereToPlayButton = Rs2Widget.getWidget(24772680); //on login screen
+            if (clickHereToPlayButton != null && !Microbot.getClientThread().runOnClientThread(clickHereToPlayButton::isHidden)) {
+                Rs2Widget.clickWidget(clickHereToPlayButton.getId());
+            }
+
+            boolean hasRunEnergy = Microbot.getClient().getEnergy() > 4000;
+
+            if (!hasRunEnergy && useStaminaPotsIfNeeded && Rs2Player.isMoving()) {
+                Rs2Inventory.useRestoreEnergyItem();
+            }
         }
 
         return true;

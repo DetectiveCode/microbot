@@ -8,7 +8,10 @@ import lombok.Setter;
 import net.runelite.api.Point;
 import net.runelite.api.*;
 import net.runelite.api.coords.WorldPoint;
-import net.runelite.api.events.*;
+import net.runelite.api.events.GameStateChanged;
+import net.runelite.api.events.GameTick;
+import net.runelite.api.events.MenuEntryAdded;
+import net.runelite.api.events.MenuOpened;
 import net.runelite.api.widgets.ComponentID;
 import net.runelite.api.widgets.Widget;
 import net.runelite.api.worldmap.WorldMap;
@@ -17,6 +20,8 @@ import net.runelite.client.config.ConfigManager;
 import net.runelite.client.eventbus.Subscribe;
 import net.runelite.client.events.ConfigChanged;
 import net.runelite.client.game.SpriteManager;
+import net.runelite.client.input.KeyListener;
+import net.runelite.client.input.KeyManager;
 import net.runelite.client.plugins.Plugin;
 import net.runelite.client.plugins.PluginDescriptor;
 import net.runelite.client.plugins.microbot.Microbot;
@@ -25,6 +30,7 @@ import net.runelite.client.plugins.microbot.shortestpath.pathfinder.Pathfinder;
 import net.runelite.client.plugins.microbot.shortestpath.pathfinder.PathfinderConfig;
 import net.runelite.client.plugins.microbot.shortestpath.pathfinder.SplitFlagMap;
 import net.runelite.client.plugins.microbot.util.player.Rs2Player;
+import net.runelite.client.plugins.microbot.util.tile.Rs2Tile;
 import net.runelite.client.plugins.microbot.util.walker.Rs2Walker;
 import net.runelite.client.ui.JagexColors;
 import net.runelite.client.ui.overlay.OverlayManager;
@@ -37,6 +43,7 @@ import net.runelite.client.util.Text;
 
 import java.awt.*;
 import java.awt.datatransfer.StringSelection;
+import java.awt.event.KeyEvent;
 import java.awt.geom.Ellipse2D;
 import java.awt.image.BufferedImage;
 import java.util.List;
@@ -46,7 +53,6 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.ThreadFactory;
 import java.util.regex.Pattern;
-import java.util.stream.IntStream;
 
 @PluginDescriptor(
         name = PluginDescriptor.Mocrosoft + "Web Walker",
@@ -55,7 +61,7 @@ import java.util.stream.IntStream;
         enabledByDefault = true,
         alwaysOn = true
 )
-public class ShortestPathPlugin extends Plugin {
+public class ShortestPathPlugin extends Plugin implements KeyListener {
     protected static final String CONFIG_GROUP = "shortestpath";
     private static final String ADD_START = "Add start";
     private static final String ADD_END = "Add end";
@@ -136,6 +142,12 @@ public class ShortestPathPlugin extends Plugin {
     @Setter
     private static boolean startPointSet = false;
 
+    @Setter
+    private static int reachedDistance;
+
+    @Inject
+    private KeyManager keyManager;
+
     @Provides
     public ShortestPathConfig provideConfig(ConfigManager configManager) {
         return configManager.getConfig(ShortestPathConfig.class);
@@ -145,8 +157,10 @@ public class ShortestPathPlugin extends Plugin {
     protected void startUp() {
         SplitFlagMap map = SplitFlagMap.fromResources();
         Map<WorldPoint, List<Transport>> transports = Transport.loadAllFromResources();
+        List<Restriction> restrictions = Restriction.loadAllFromResources();
 
-        pathfinderConfig = new PathfinderConfig(map, transports, client, config);
+
+        pathfinderConfig = new PathfinderConfig(map, transports, restrictions, client, config);
 
         Rs2Walker.setConfig(config);
 
@@ -158,6 +172,8 @@ public class ShortestPathPlugin extends Plugin {
         if (config.drawDebugPanel()) {
             overlayManager.add(debugOverlayPanel);
         }
+
+        keyManager.registerKeyListener(this);
     }
 
     @Override
@@ -167,6 +183,7 @@ public class ShortestPathPlugin extends Plugin {
         overlayManager.remove(pathMapOverlay);
         overlayManager.remove(pathMapTooltipOverlay);
         overlayManager.remove(debugOverlayPanel);
+        keyManager.unregisterKeyListener(this);
         exit();
     }
 
@@ -206,8 +223,9 @@ public class ShortestPathPlugin extends Plugin {
             return true;
         }
 
+        var reachableTiles = Rs2Tile.getReachableTilesFromTile(location, config.recalculateDistance() - 1);
         for (WorldPoint point : pathfinder.getPath()) {
-            if (location.distanceTo2D(point) < config.recalculateDistance()) {
+            if (reachableTiles.containsKey(point)) {
                 return true;
             }
         }
@@ -252,12 +270,15 @@ public class ShortestPathPlugin extends Plugin {
             return;
         }
 
-        if (Rs2Player.getWorldLocation().distanceTo(pathfinder.getTarget()) < config.reachedDistance()) {
+        var path = pathfinder.getPath();
+
+        if (Rs2Player.getWorldLocation().distanceTo(pathfinder.getTarget()) < reachedDistance
+                && Rs2Tile.getReachableTilesFromTile(Rs2Player.getWorldLocation(), reachedDistance).containsKey(path.get(path.size() - 1))) {
             setTarget(null);
             if (Microbot.getClientThread().scheduledFuture != null) {
                 Microbot.getClientThread().scheduledFuture.cancel(true);
             }
-            System.out.println("Web Walker finished with reachedDistance " + config.reachedDistance());
+            System.out.println("Web Walker finished with reachedDistance " + reachedDistance);
             return;
         }
 
@@ -601,5 +622,26 @@ public class ShortestPathPlugin extends Plugin {
             polygon.addPoint(point.x + offsetX, point.y + offsetY);
         }
         return polygon;
+    }
+
+    @Override
+    public void keyTyped(KeyEvent e) {
+
+    }
+
+    @Override
+    public void keyPressed(KeyEvent e) {
+        if (client == null || !Microbot.isLoggedIn())
+        {
+            return;
+        }
+        if (e.getKeyCode() == KeyEvent.VK_ESCAPE) {
+            Rs2Walker.setTarget(null);
+        }
+    }
+
+    @Override
+    public void keyReleased(KeyEvent e) {
+
     }
 }

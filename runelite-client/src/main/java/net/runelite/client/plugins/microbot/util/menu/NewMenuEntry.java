@@ -2,10 +2,9 @@ package net.runelite.client.plugins.microbot.util.menu;
 
 import net.runelite.api.*;
 import net.runelite.api.widgets.Widget;
-import net.runelite.client.plugins.microbot.util.reflection.Rs2Reflection;
+import org.jetbrains.annotations.NotNull;
 
 import javax.annotation.Nullable;
-import java.lang.reflect.InvocationTargetException;
 import java.util.function.Consumer;
 
 public class NewMenuEntry implements MenuEntry {
@@ -17,6 +16,9 @@ public class NewMenuEntry implements MenuEntry {
     private int param1;
     private boolean forceLeftClick;
     private int itemId;
+    private Actor actor;
+    private TileObject gameObject;
+    private Widget widget;
 
     public NewMenuEntry(int param0, int param1, int opcode, int identifier, int itemId, String target) {
         this.option = "Use";
@@ -25,8 +27,33 @@ public class NewMenuEntry implements MenuEntry {
         this.type = MenuAction.of(opcode);
         this.param0 = param0;
         this.param1 = param1;
-        this.forceLeftClick = true;
+        this.forceLeftClick = false;
         this.itemId = itemId;
+    }
+
+    public NewMenuEntry(int param0, int param1, int opcode, int identifier, int itemId, String target, Actor actor) {
+        this.option = "Use";
+        this.target = target;
+        this.identifier = identifier;
+        this.type = MenuAction.of(opcode);
+        this.param0 = param0;
+        this.param1 = param1;
+        this.forceLeftClick = false;
+        this.itemId = itemId;
+        this.actor = actor;
+    }
+
+    public NewMenuEntry(int param0, int param1, int opcode, int identifier, int itemId, String option, String target, TileObject gameObject) {
+        this.option = "Use";
+        this.target = target;
+        this.identifier = identifier;
+        this.type = MenuAction.of(opcode);
+        this.param0 = param0;
+        this.param1 = param1;
+        this.forceLeftClick = false;
+        this.itemId = itemId;
+        this.option = option;
+        this.gameObject = gameObject;
     }
 
     public NewMenuEntry(String option, String target, int identifier, MenuAction type, int param0, int param1, boolean forceLeftClick) {
@@ -37,6 +64,20 @@ public class NewMenuEntry implements MenuEntry {
         this.param0 = param0;
         this.param1 = param1;
         this.forceLeftClick = forceLeftClick;
+    }
+
+    public NewMenuEntry(String option, int param0, int param1, int opcode, int identifier, int itemId, String target) {
+        this.option = option;
+        this.target = target;
+        this.identifier = identifier;
+        this.type = MenuAction.of(opcode);
+        this.param0 = param0;
+        this.param1 = param1;
+        this.forceLeftClick = false;
+        this.itemId = itemId;
+    }
+
+    public NewMenuEntry() {
     }
 
     public String getOption() {
@@ -124,8 +165,9 @@ public class NewMenuEntry implements MenuEntry {
         return this;
     }
 
-    public MenuEntry setParent(MenuEntry parent) {
-        return this;
+    @Override
+    public Consumer<MenuEntry> onClick() {
+        return null;
     }
 
     public MenuEntry getParent() {
@@ -144,24 +186,59 @@ public class NewMenuEntry implements MenuEntry {
         return itemId;
     }
 
+    @Override
+    public MenuEntry setItemId(int itemId) {
+        this.itemId = itemId;
+        return this;
+    }
+
+
+    public MenuEntry setWidget(Widget widget) {
+        this.widget = widget;
+        return this;
+    }
+
     @Nullable
     public Widget getWidget() {
-        return null;
+        return widget;
     }
 
     @Nullable
     public NPC getNpc() {
-        return null;
+        return actor instanceof NPC ? (NPC) actor : null;
+
     }
 
     @Nullable
     public Player getPlayer() {
-        return null;
+        return actor instanceof Player ? (Player) actor : null;
     }
 
     @Nullable
     public Actor getActor() {
+        return actor;
+    }
+
+    @Nullable
+    public TileObject getGameObject() {
+        return gameObject;
+    }
+
+    @org.jetbrains.annotations.Nullable
+    @Override
+    public Menu getSubMenu() {
         return null;
+    }
+
+    @NotNull
+    @Override
+    public Menu createSubMenu() {
+        return null;
+    }
+
+    @Override
+    public void deleteSubMenu() {
+
     }
 
     public boolean equals(Object o) {
@@ -205,14 +282,8 @@ public class NewMenuEntry implements MenuEntry {
                 Object this$type = this.getType();
                 Object other$type = other.getType();
                 if (this$type == null) {
-                    if (other$type != null) {
-                        return false;
-                    }
-                } else if (!this$type.equals(other$type)) {
-                    return false;
-                }
-
-                return true;
+                    return other$type == null;
+                } else return this$type.equals(other$type);
             }
         }
     }
@@ -240,8 +311,5 @@ public class NewMenuEntry implements MenuEntry {
     public String toString() {
         String var10000 = this.getOption();
         return "NewMenuEntry(option=" + var10000 + ", target=" + this.getTarget() + ", identifier=" + this.getIdentifier() + ", type=" + this.getType() + ", param0=" + this.getParam0() + ", param1=" + this.getParam1() + ", forceLeftClick=" + this.isForceLeftClick() + ")";
-    }
-
-    public NewMenuEntry() {
     }
 }

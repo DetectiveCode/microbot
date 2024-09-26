@@ -24,31 +24,26 @@
  */
 package net.runelite.client.plugins.questhelper.helpers.quests.tearsofguthix;
 
-import net.runelite.client.plugins.questhelper.ItemCollections;
-import net.runelite.client.plugins.questhelper.QuestDescriptor;
-import net.runelite.client.plugins.questhelper.QuestHelperQuest;
-import net.runelite.client.plugins.questhelper.Zone;
+import net.runelite.api.*;
+import net.runelite.api.coords.WorldPoint;
+import net.runelite.client.plugins.questhelper.collections.ItemCollections;
 import net.runelite.client.plugins.questhelper.panel.PanelDetails;
 import net.runelite.client.plugins.questhelper.questhelpers.BasicQuestHelper;
 import net.runelite.client.plugins.questhelper.requirements.Requirement;
-import net.runelite.client.plugins.questhelper.requirements.ZoneRequirement;
 import net.runelite.client.plugins.questhelper.requirements.conditional.Conditions;
 import net.runelite.client.plugins.questhelper.requirements.item.ItemRequirement;
 import net.runelite.client.plugins.questhelper.requirements.player.SkillRequirement;
 import net.runelite.client.plugins.questhelper.requirements.quest.QuestPointRequirement;
 import net.runelite.client.plugins.questhelper.requirements.var.VarbitRequirement;
+import net.runelite.client.plugins.questhelper.requirements.zone.Zone;
+import net.runelite.client.plugins.questhelper.requirements.zone.ZoneRequirement;
 import net.runelite.client.plugins.questhelper.rewards.ExperienceReward;
 import net.runelite.client.plugins.questhelper.rewards.QuestPointReward;
 import net.runelite.client.plugins.questhelper.rewards.UnlockReward;
 import net.runelite.client.plugins.questhelper.steps.*;
-import net.runelite.api.*;
-import net.runelite.api.coords.WorldPoint;
 
 import java.util.*;
 
-@QuestDescriptor(
-	quest = QuestHelperQuest.TEARS_OF_GUTHIX
-)
 public class TearsOfGuthix extends BasicQuestHelper
 {
 	//Items Required
@@ -67,8 +62,7 @@ public class TearsOfGuthix extends BasicQuestHelper
 	public Map<Integer, QuestStep> loadSteps()
 	{
 		Map<Integer, QuestStep> steps = new HashMap<>();
-		setupZones();
-		setupRequirements();
+		initializeRequirements();
 		setupConditions();
 		setupSteps();
 
@@ -90,7 +84,8 @@ public class TearsOfGuthix extends BasicQuestHelper
 		return steps;
 	}
 
-	private void setupZones()
+	@Override
+	protected void setupZones()
 	{
 		swamp = new Zone(new WorldPoint(3138, 9536, 0), new WorldPoint(3261, 9601, 0));
 		junaRoom = new Zone(new WorldPoint(3205, 9484, 0), new WorldPoint(3263, 9537, 2));
@@ -98,7 +93,7 @@ public class TearsOfGuthix extends BasicQuestHelper
 	}
 
 	@Override
-	public void setupRequirements()
+	protected void setupRequirements()
 	{
 		litSapphireLantern = new ItemRequirement("Sapphire lantern", ItemID.SAPPHIRE_LANTERN_4702).isNotConsumed();
 		litSapphireLantern.setTooltip("You can make this by using a cut sapphire on a bullseye lantern");
@@ -151,7 +146,7 @@ public class TearsOfGuthix extends BasicQuestHelper
 		talkToJuna = new ObjectStep(this, NullObjectID.NULL_3193, new WorldPoint(3252, 9517, 2),
 			"Talk to Juna.");
 		talkToJuna.addDialogStep("Okay...");
-		useLanternOnLightCreature = new NpcStep(this, NpcID.LIGHT_CREATURE_5783, new WorldPoint(3228, 9518, 2),
+		useLanternOnLightCreature = new NpcStep(this, NpcID.LIGHT_CREATURE_5784, new WorldPoint(3228, 9518, 2),
 			"Go back up the rocks and use the lit sapphire lantern on one of the light creatures nearby.", litSapphireLanternHighlighted);
 		mineRock = new ObjectStep(this, ObjectID.MAGICAL_ROCKS_6670, new WorldPoint(3229, 9497, 2),
 			"Mine one of the rocks.", pickaxe);

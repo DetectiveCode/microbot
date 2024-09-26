@@ -29,7 +29,7 @@
 	<parent>
 		<groupId>net.runelite</groupId>
 		<artifactId>runelite-parent</artifactId>
-		<version>1.10.31-SNAPSHOT</version>
+		<version>1.10.38-SNAPSHOT</version>
 	</parent>
 
 	<artifactId>client</artifactId>
@@ -41,10 +41,27 @@
 		<git.commit.id.abbrev>nogit</git.commit.id.abbrev>
 		<git.dirty>false</git.dirty>
 		<shade.skip>false</shade.skip>
-		<microbot.version>1.1.1</microbot.version>
+		<microbot.version>1.4.9</microbot.version>
 	</properties>
 
 	<dependencies>
+		<dependency>
+			<groupId>org.json</groupId>
+			<artifactId>json</artifactId>
+			<version>20230227</version>
+		</dependency>
+		<!-- RoaringBitmap library -->
+		<dependency>
+			<groupId>org.roaringbitmap</groupId>
+			<artifactId>RoaringBitmap</artifactId>
+			<version>0.9.44</version>
+		</dependency>
+		<!-- CFR decompiler library -->
+		<dependency>
+			<groupId>org.benf</groupId>
+			<artifactId>cfr</artifactId>
+			<version>0.152</version>
+		</dependency>
 		<dependency>
 			<groupId>com.microsoft.signalr</groupId>
 			<artifactId>signalr</artifactId>
@@ -126,11 +143,6 @@
 		<dependency>
 			<groupId>org.apache.commons</groupId>
 			<artifactId>commons-text</artifactId>
-			<version>1.2</version>
-		</dependency>
-		<dependency>
-			<groupId>net.runelite.archive-patcher</groupId>
-			<artifactId>archive-patcher-applier</artifactId>
 			<version>1.2</version>
 		</dependency>
 		<dependency>
@@ -267,7 +279,7 @@
 		</dependency>
 		<dependency>
 			<groupId>net.runelite</groupId>
-			<artifactId>client-patch</artifactId>
+			<artifactId>injected-client</artifactId>
 			<version>${project.version}</version>
 			<scope>runtime</scope>
 		</dependency>
@@ -479,19 +491,6 @@
 			<plugin>
 				<groupId>org.apache.maven.plugins</groupId>
 				<artifactId>maven-pmd-plugin</artifactId>
-				<version>3.16.0</version>
-				<dependencies>
-					<dependency>
-						<groupId>net.sourceforge.pmd</groupId>
-						<artifactId>pmd-core</artifactId>
-						<version>6.44.0</version>
-					</dependency>
-					<dependency>
-						<groupId>net.sourceforge.pmd</groupId>
-						<artifactId>pmd-java</artifactId>
-						<version>6.44.0</version>
-					</dependency>
-				</dependencies>
 				<configuration>
 					<failOnViolation>true</failOnViolation>
 					<printFailingErrors>true</printFailingErrors>

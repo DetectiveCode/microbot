@@ -1,5 +1,7 @@
 package net.runelite.client.plugins.microbot.nmz;
 
+import lombok.Getter;
+import lombok.Setter;
 import net.runelite.api.*;
 import net.runelite.api.coords.WorldPoint;
 import net.runelite.api.widgets.Widget;
@@ -12,6 +14,7 @@ import net.runelite.client.plugins.microbot.util.inventory.Rs2Inventory;
 import net.runelite.client.plugins.microbot.util.keyboard.Rs2Keyboard;
 import net.runelite.client.plugins.microbot.util.math.Random;
 import net.runelite.client.plugins.microbot.util.npc.Rs2Npc;
+import net.runelite.client.plugins.microbot.util.player.Rs2Player;
 import net.runelite.client.plugins.microbot.util.prayer.Rs2Prayer;
 import net.runelite.client.plugins.microbot.util.prayer.Rs2PrayerEnum;
 import net.runelite.client.plugins.microbot.util.walker.Rs2Walker;
@@ -31,6 +34,10 @@ public class NmzScript extends Script {
 
     public static PrayerPotionScript prayerPotionScript;
 
+    @Getter
+    @Setter
+    private static boolean hasSurge = false;
+
     public boolean canStartNmz() {
         return Rs2Inventory.count("overload (4)") == config.overloadPotionAmount() && Rs2Inventory.count("absorption (4)") == config.absorptionPotionAmount() ||
                 (Rs2Inventory.hasItem("prayer potion") && config.togglePrayerPotions());
@@ -40,6 +47,7 @@ public class NmzScript extends Script {
     public boolean run(NmzConfig config) {
         NmzScript.config = config;
         prayerPotionScript = new PrayerPotionScript();
+        Microbot.getSpecialAttackConfigs().setSpecialAttack(true);
         mainScheduledFuture = scheduledExecutorService.scheduleWithFixedDelay(() -> {
             try {
                 if (!Microbot.isLoggedIn()) return;
@@ -51,6 +59,7 @@ public class NmzScript extends Script {
                 boolean isOutsideNmz = Microbot.getClient().getLocalPlayer().getWorldLocation().distanceTo(new WorldPoint(2602, 3116, 0)) < 20;
                 useOverload = Microbot.getClient().getBoostedSkillLevel(Skill.RANGED) == Microbot.getClient().getRealSkillLevel(Skill.RANGED);
                 if (isOutsideNmz) {
+                    Rs2Walker.setTarget(null);
                     handleOutsideNmz();
                 } else {
                     handleInsideNmz();
@@ -79,7 +88,6 @@ public class NmzScript extends Script {
             if (canStartNmz()) {
                 consumeEmptyVial();
             } else {
-                Microbot.showMessage("Bot can't start because your overloads or absorption potions do not match the configured number in your plugin settings.");
                 sleep(2000);
             }
         }
@@ -89,11 +97,19 @@ public class NmzScript extends Script {
         prayerPotionScript.run();
         if (config.togglePrayerPotions())
             Rs2Prayer.toggle(Rs2PrayerEnum.PROTECT_MELEE, true);
-        useZapperIfConfigured();
+        if (!useOrbs() && config.walkToCenter()) {
+            walkToCenter();
+        }
         useOverloadPotion();
         manageLocatorOrb();
-        toggleSpecialAttack();
         useAbsorptionPotion();
+    }
+
+    private void walkToCenter() {
+        WorldPoint center = new WorldPoint(Random.random(2270, 2276), Random.random(4693, 4696), 0);
+        if (center.distanceTo(Rs2Player.getWorldLocation()) > 4) {
+            Rs2Walker.walkTo(center, 6);
+        }
     }
 
     public void startNmzDream() {
@@ -107,20 +123,31 @@ public class NmzScript extends Script {
         Rs2Keyboard.enter();
     }
 
-    public void useZapperIfConfigured() {
+    public boolean useOrbs() {
+        boolean orbHasSpawned = false;
         if (config.useZapper()) {
-            interactWithObject(ObjectID.ZAPPER_26256);
-            interactWithObject(ObjectID.RECURRENT_DAMAGE);
+            orbHasSpawned = interactWithObject(ObjectID.ZAPPER_26256);
         }
+        if (config.useReccurentDamage()) {
+            orbHasSpawned = interactWithObject(ObjectID.RECURRENT_DAMAGE);
+        }
+
+        if (config.usePowerSurge()) {
+            orbHasSpawned = interactWithObject(ObjectID.POWER_SURGE);
+        }
+
+        return orbHasSpawned;
     }
 
-    public void interactWithObject(int objectId) {
+    public boolean interactWithObject(int objectId) {
         TileObject rs2GameObject = Rs2GameObject.findObjectById(objectId);
         if (rs2GameObject != null) {
             Rs2Walker.walkFastLocal(rs2GameObject.getLocalLocation());
             sleepUntil(() -> Microbot.getClient().getLocalPlayer().getWorldLocation().distanceTo(rs2GameObject.getWorldLocation()) < 5);
             Rs2GameObject.interact(objectId);
+            return true;
         }
+        return false;
     }
 
     public void manageLocatorOrb() {
@@ -155,12 +182,6 @@ public class NmzScript extends Script {
         }
     }
 
-    public void toggleSpecialAttack() {
-        if (Microbot.getClient().getLocalPlayer().isInteracting() && config.useSpecialAttack()) {
-            Rs2Combat.setSpecState(true, 1000);
-        }
-    }
-
     public void useOverloadPotion() {
         if (useOverload && Rs2Inventory.hasItem("overload") && Microbot.getClient().getBoostedSkillLevel(Skill.HITPOINTS) > 50) {
             Rs2Inventory.interact(x -> x.name.toLowerCase().contains("overload"), "drink");
@@ -188,6 +209,7 @@ public class NmzScript extends Script {
             Rs2Keyboard.typeString("1");
             Rs2Keyboard.enter();
             sleepUntil(() -> !Rs2Inventory.hasItem(objectId));
+            Rs2Inventory.dropAll(itemName);
         }
     }
 

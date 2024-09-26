@@ -29,40 +29,6 @@ import com.google.common.base.MoreObjects;
 import com.google.common.base.Strings;
 import com.google.common.collect.ComparisonChain;
 import com.google.gson.Gson;
-import java.awt.Color;
-import java.awt.Dimension;
-import java.awt.Point;
-import java.awt.Rectangle;
-import java.io.File;
-import java.io.IOException;
-import java.lang.reflect.Method;
-import java.lang.reflect.Modifier;
-import java.lang.reflect.ParameterizedType;
-import java.lang.reflect.Proxy;
-import java.lang.reflect.Type;
-import java.time.Duration;
-import java.time.Instant;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Base64;
-import java.util.Collections;
-import java.util.Comparator;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Objects;
-import java.util.Set;
-import java.util.WeakHashMap;
-import java.util.concurrent.ExecutionException;
-import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.TimeUnit;
-import java.util.stream.Collectors;
-import javax.annotation.Nonnull;
-import javax.annotation.Nullable;
-import javax.inject.Inject;
-import javax.inject.Named;
-import javax.inject.Singleton;
 import lombok.Getter;
 import lombok.NonNull;
 import lombok.extern.slf4j.Slf4j;
@@ -149,17 +115,17 @@ public class ConfigManager
 
 	@Inject
 	private ConfigManager(
-		@Nullable @Named("profile") String profile,
-		ScheduledExecutorService scheduledExecutorService,
-		EventBus eventBus,
-		@Nullable Client client,
-		Gson gson,
-		@Nonnull ConfigClient configClient,
-		ProfileManager profileManager,
-		SessionManager sessionManager
+			@Nullable @Named("profile") String profile,
+			ScheduledExecutorService scheduledExecutorService,
+			EventBus eventBus,
+			@Nullable Client client,
+			Gson gson,
+			@Nonnull ConfigClient configClient,
+			ProfileManager profileManager,
+			SessionManager sessionManager
 	)
 	{
-		this.configProfileName = profile;
+		configProfileName = profile;
 		this.eventBus = eventBus;
 		this.client = client;
 		this.gson = gson;
@@ -327,6 +293,42 @@ public class ConfigManager
 			}
 
 			profile.setPassword(password);
+			lock.dirty();
+		}
+	}
+
+	public void setBankPin(ConfigProfile profile, String bankPin) {
+
+		// flush pending config changes first in the event the profile being
+		// synced is the active profile.
+		sendConfig();
+
+		try (ProfileManager.Lock lock = profileManager.lock())
+		{
+			profile = lock.findProfile(profile.getId());
+			if (profile == null || profile.getBankPin() == bankPin)
+			{
+				return;
+			}
+
+			profile.setBankPin(bankPin);
+			lock.dirty();
+		}
+	}
+
+	public void setMember(ConfigProfile profile, boolean isMember) {
+
+		// flush pending config changes first in the event the profile being
+		// synced is the active profile.
+		sendConfig();
+
+		try (ProfileManager.Lock lock = profileManager.lock()) {
+			profile = lock.findProfile(profile.getId());
+			if (profile == null || profile.isMember() == isMember) {
+				return;
+			}
+
+			profile.setMember(isMember);
 			lock.dirty();
 		}
 	}
@@ -505,7 +507,7 @@ public class ConfigManager
 			{
 				var existing = seen.get(profile.getId());
 				log.warn("Duplicate profiles detected: {} and {}. Removing the latter.",
-					existing, profile);
+						existing, profile);
 				it.remove();
 				lock.dirty();
 				continue;
@@ -736,9 +738,9 @@ public class ConfigManager
 
 		long id = profile.getId();
 		Profile remoteProfile = remoteProfiles.stream()
-			.filter(p -> p.getId() == id)
-			.findFirst()
-			.orElse(null);
+				.filter(p -> p.getId() == id)
+				.findFirst()
+				.orElse(null);
 
 		if (remoteProfile == null)
 		{
@@ -794,9 +796,9 @@ public class ConfigManager
 		}
 
 		T t = (T) Proxy.newProxyInstance(clazz.getClassLoader(), new Class<?>[]
-			{
-				clazz
-			}, handler);
+				{
+						clazz
+				}, handler);
 
 		return t;
 	}
@@ -804,8 +806,8 @@ public class ConfigManager
 	public List<String> getConfigurationKeys(String prefix)
 	{
 		return configProfile.keySet().stream()
-			.filter(k -> k.startsWith(prefix))
-			.collect(Collectors.toList());
+				.filter(k -> k.startsWith(prefix))
+				.collect(Collectors.toList());
 	}
 
 	public List<String> getRSProfileConfigurationKeys(String group, String profile, String keyPrefix)
@@ -819,9 +821,9 @@ public class ConfigManager
 
 		String prefix = group + "." + profile + "." + keyPrefix;
 		return rsProfileConfigProfile.keySet().stream()
-			.filter(k -> k.startsWith(prefix))
-			.map(k -> splitKey(k)[KEY_SPLITTER_KEY])
-			.collect(Collectors.toList());
+				.filter(k -> k.startsWith(prefix))
+				.map(k -> splitKey(k)[KEY_SPLITTER_KEY])
+				.collect(Collectors.toList());
 	}
 
 	public static String getWholeKey(String groupName, String profile, String key)
@@ -1064,45 +1066,47 @@ public class ConfigManager
 		}
 
 		final List<ConfigSectionDescriptor> sections = Arrays.stream(inter.getDeclaredFields())
-			.filter(m -> m.isAnnotationPresent(ConfigSection.class) && m.getType() == String.class)
-			.map(m ->
-			{
-				try
+				.filter(m -> m.isAnnotationPresent(ConfigSection.class) && m.getType() == String.class)
+				.map(m ->
 				{
-					return new ConfigSectionDescriptor(
-						String.valueOf(m.get(inter)),
-						m.getDeclaredAnnotation(ConfigSection.class)
-					);
-				}
-				catch (IllegalAccessException e)
-				{
-					log.warn("Unable to load section {}::{}", inter.getSimpleName(), m.getName());
-					return null;
-				}
-			})
-			.filter(Objects::nonNull)
-			.sorted((a, b) -> ComparisonChain.start()
-				.compare(a.getSection().position(), b.getSection().position())
-				.compare(a.getSection().name(), b.getSection().name())
-				.result())
-			.collect(Collectors.toList());
+					try
+					{
+						return new ConfigSectionDescriptor(
+								String.valueOf(m.get(inter)),
+								m.getDeclaredAnnotation(ConfigSection.class)
+						);
+					}
+					catch (IllegalAccessException e)
+					{
+						log.warn("Unable to load section {}::{}", inter.getSimpleName(), m.getName());
+						return null;
+					}
+				})
+				.filter(Objects::nonNull)
+				.sorted((a, b) -> ComparisonChain.start()
+						.compare(a.getSection().position(), b.getSection().position())
+						.compare(a.getSection().name(), b.getSection().name())
+						.result())
+				.collect(Collectors.toList());
 
 		final List<ConfigItemDescriptor> items = Arrays.stream(inter.getMethods())
-			.filter(m -> m.getParameterCount() == 0 && m.isAnnotationPresent(ConfigItem.class))
-			.map(m -> new ConfigItemDescriptor(
-				m.getDeclaredAnnotation(ConfigItem.class),
-				m.getGenericReturnType(),
-				m.getDeclaredAnnotation(Range.class),
-				m.getDeclaredAnnotation(Alpha.class),
-				m.getDeclaredAnnotation(Units.class)
-			))
-			.sorted((a, b) -> ComparisonChain.start()
-				.compare(a.getItem().position(), b.getItem().position())
-				.compare(a.getItem().name(), b.getItem().name())
-				.result())
-			.collect(Collectors.toList());
+				.filter(m -> m.getParameterCount() == 0 && m.isAnnotationPresent(ConfigItem.class))
+				.map(m -> new ConfigItemDescriptor(
+						m.getDeclaredAnnotation(ConfigItem.class),
+						m.getGenericReturnType(),
+						m.getDeclaredAnnotation(Range.class),
+						m.getDeclaredAnnotation(Alpha.class),
+						m.getDeclaredAnnotation(Units.class)
+				))
+				.sorted((a, b) -> ComparisonChain.start()
+						.compare(a.getItem().position(), b.getItem().position())
+						.compare(a.getItem().name(), b.getItem().name())
+						.result())
+				.collect(Collectors.toList());
 
-		return new ConfigDescriptor(group, sections, items);
+		ConfigInformation information = inter.getAnnotation(ConfigInformation.class);
+
+		return new ConfigDescriptor(group, sections, items, information);
 	}
 
 	/**
@@ -1178,7 +1182,14 @@ public class ConfigManager
 
 			log.debug("Setting default configuration value for {}.{} to {}", group.value(), item.keyName(), defaultValue);
 
-			setConfiguration(group.value(), item.keyName(), valueString);
+			if (Strings.isNullOrEmpty(valueString))
+			{
+				unsetConfiguration(group.value(), item.keyName());
+			}
+			else
+			{
+				setConfiguration(group.value(), item.keyName(), valueString);
+			}
 		}
 	}
 
@@ -1284,8 +1295,8 @@ public class ConfigManager
 					// To allow class unloading, use a temporary child injector
 					// and use it to get the instance, and cache it a weak map.
 					serializer = RuneLite.getInjector()
-						.createChildInjector()
-						.getInstance(serializerClass);
+							.createChildInjector()
+							.getInstance(serializerClass);
 					serializers.put(type, serializer);
 				}
 				return serializer.deserialize(str);
@@ -1356,8 +1367,8 @@ public class ConfigManager
 				if (serializer == null)
 				{
 					serializer = RuneLite.getInjector()
-						.createChildInjector()
-						.getInstance(serializerClass);
+							.createChildInjector()
+							.getInstance(serializerClass);
 					serializers.put(serializerClass, serializer);
 				}
 				return serializer.serialize(object);
@@ -1367,8 +1378,8 @@ public class ConfigManager
 	}
 
 	@Subscribe(
-		// run after plugins, in the event they save config on shutdown
-		priority = -100
+			// run after plugins, in the event they save config on shutdown
+			priority = -100
 	)
 	private void onClientShutdown(ClientShutdown e)
 	{
@@ -1504,20 +1515,20 @@ public class ConfigManager
 		}
 
 		return profileKeys.stream()
-			.map(key ->
-			{
-				Long accid = getConfiguration(RSPROFILE_GROUP, key, RSPROFILE_ACCOUNT_HASH, long.class);
-				RuneScapeProfile prof = new RuneScapeProfile(
-					getConfiguration(RSPROFILE_GROUP, key, RSPROFILE_DISPLAY_NAME),
-					getConfiguration(RSPROFILE_GROUP, key, RSPROFILE_TYPE, RuneScapeProfileType.class),
-					accid == null ? RuneScapeProfile.ACCOUNT_HASH_INVALID : accid,
-					key
-				);
+				.map(key ->
+				{
+					Long accid = getConfiguration(RSPROFILE_GROUP, key, RSPROFILE_ACCOUNT_HASH, long.class);
+					RuneScapeProfile prof = new RuneScapeProfile(
+							getConfiguration(RSPROFILE_GROUP, key, RSPROFILE_DISPLAY_NAME),
+							getConfiguration(RSPROFILE_GROUP, key, RSPROFILE_TYPE, RuneScapeProfileType.class),
+							accid == null ? RuneScapeProfile.ACCOUNT_HASH_INVALID : accid,
+							key
+					);
 
-				return prof;
-			})
-			.sorted(Comparator.comparing(RuneScapeProfile::getKey))
-			.collect(Collectors.toCollection(ArrayList::new));
+					return prof;
+				})
+				.sorted(Comparator.comparing(RuneScapeProfile::getKey))
+				.collect(Collectors.toCollection(ArrayList::new));
 	}
 
 	private synchronized RuneScapeProfile findRSProfile(List<RuneScapeProfile> profiles, long accountHash, RuneScapeProfileType type, String displayName, boolean create)
@@ -1528,8 +1539,8 @@ public class ConfigManager
 		}
 
 		List<RuneScapeProfile> matches = profiles.stream()
-			.filter(p -> p.getType() == type && accountHash == p.getAccountHash())
-			.collect(Collectors.toList());
+				.filter(p -> p.getType() == type && accountHash == p.getAccountHash())
+				.collect(Collectors.toList());
 
 		if (matches.size() > 1)
 		{
@@ -1549,12 +1560,12 @@ public class ConfigManager
 		// generate the new key deterministically so if you "create" the same profile on 2 different clients it doesn't duplicate
 		Set<String> keys = profiles.stream().map(RuneScapeProfile::getKey).collect(Collectors.toSet());
 		byte[] key = {
-			(byte) accountHash,
-			(byte) (accountHash >> 8),
-			(byte) (accountHash >> 16),
-			(byte) (accountHash >> 24),
-			(byte) (accountHash >> 32),
-			(byte) (accountHash >> 40),
+				(byte) accountHash,
+				(byte) (accountHash >> 8),
+				(byte) (accountHash >> 16),
+				(byte) (accountHash >> 24),
+				(byte) (accountHash >> 32),
+				(byte) (accountHash >> 40),
 		};
 		key[0] += type.ordinal();
 		for (int i = 0; i < 0xFF; i++, key[1]++)

@@ -7,16 +7,18 @@ import net.runelite.api.*;
 import net.runelite.api.coords.LocalPoint;
 import net.runelite.api.coords.WorldArea;
 import net.runelite.api.coords.WorldPoint;
+import net.runelite.client.plugins.devtools.MovementFlag;
 import net.runelite.client.plugins.microbot.Microbot;
 import net.runelite.client.plugins.microbot.shortestpath.ShortestPathConfig;
 import net.runelite.client.plugins.microbot.shortestpath.ShortestPathPlugin;
 import net.runelite.client.plugins.microbot.shortestpath.Transport;
 import net.runelite.client.plugins.microbot.shortestpath.pathfinder.Pathfinder;
-import net.runelite.client.plugins.microbot.util.camera.Rs2Camera;
 import net.runelite.client.plugins.microbot.util.gameobject.Rs2GameObject;
 import net.runelite.client.plugins.microbot.util.math.Random;
 import net.runelite.client.plugins.microbot.util.menu.NewMenuEntry;
+import net.runelite.client.plugins.microbot.util.npc.Rs2Npc;
 import net.runelite.client.plugins.microbot.util.player.Rs2Player;
+import net.runelite.client.plugins.microbot.util.tile.Rs2Tile;
 import net.runelite.client.ui.overlay.worldmap.WorldMapPoint;
 
 import java.awt.*;
@@ -31,125 +33,238 @@ import java.util.stream.IntStream;
 import static net.runelite.client.plugins.microbot.util.Global.*;
 
 
-
 public class Rs2Walker {
-    static int stuckCount = 0;
-    static WorldPoint lastPosition;
+    private static final ExecutorService pathfindingExecutor = Executors.newSingleThreadExecutor();
     @Setter
     public static ShortestPathConfig config;
+    static int stuckCount = 0;
+    static WorldPoint lastPosition;
     static int idle = 0;
-
     static WorldPoint currentTarget;
+    static int nextWalkingDistance = 10;
 
-    private static ExecutorService pathfindingExecutor = Executors.newSingleThreadExecutor();
+    public static boolean walkTo(WorldArea area, int distanceThreshold) {
+        if (area.distanceTo(Rs2Player.getWorldLocation()) > distanceThreshold) {
+            var points = area.toWorldPointList();
+            var index = new java.util.Random().nextInt(points.size());
+            return Rs2Walker.walkTo(points.get(index));
+        }
+        return true;
+    }
+
+    public static boolean walkTo(int x, int y, int plane) {
+        return walkTo(x, y, plane, 6);
+    }
+
+    public static boolean walkTo(int x, int y, int plane, int distance) {
+        return walkTo(new WorldPoint(x, y, plane), distance);
+    }
+
 
     public static boolean walkTo(WorldPoint target) {
-        return walkTo(target, 6);
+        return walkTo(target, config.reachedDistance());
     }
 
     public static boolean walkTo(WorldPoint target, int distance) {
-        if (Rs2Player.getWorldLocation().distanceTo(target) < distance) {
+        if (Rs2Tile.getReachableTilesFromTile(Rs2Player.getWorldLocation(), distance).containsKey(target)
+                || !Rs2Tile.isWalkable(LocalPoint.fromWorld(Microbot.getClient().getTopLevelWorldView(), target)) && Rs2Player.getWorldLocation().distanceTo(target) <= distance) {
             return true;
         }
         if (currentTarget != null && currentTarget.equals(target) && ShortestPathPlugin.getMarker() != null && !Microbot.getClientThread().scheduledFuture.isDone())
             return false;
         setTarget(target);
+        ShortestPathPlugin.setReachedDistance(distance);
         stuckCount = 0;
         idle = 0;
         Microbot.getClientThread().runOnSeperateThread(() -> {
-            while (true) {
-                if (!Microbot.isLoggedIn()) {
-                    setTarget(null);
-                    break;
-                }
-                if (ShortestPathPlugin.getPathfinder() == null) {
-                    if (ShortestPathPlugin.getMarker() == null)
+            try {
+                while (!Thread.currentThread().isInterrupted()) {
+                    if (!Microbot.isLoggedIn()) {
+                        setTarget(null);
                         break;
-                    Microbot.status = "Waiting for pathfinder...";
-                    continue;
-                }
-                if (!ShortestPathPlugin.getPathfinder().isDone()) {
-                    Microbot.status = "Waiting for path calculation...";
-                    continue;
-                }
+                    }
+                    if (ShortestPathPlugin.getPathfinder() == null) {
+                        if (ShortestPathPlugin.getMarker() == null)
+                            break;
+                        Microbot.status = "Waiting for pathfinder...";
+                        continue;
+                    }
+                    if (!ShortestPathPlugin.getPathfinder().isDone()) {
+                        Microbot.status = "Waiting for path calculation...";
+                        continue;
+                    }
 
-                if (isNear(ShortestPathPlugin.getPathfinder().getPath().get(ShortestPathPlugin.getPathfinder().getPath().size() - 1))) {
-                    setTarget(null);
-                    break;
-                }
+                    if (isNear(ShortestPathPlugin.getPathfinder().getPath().get(ShortestPathPlugin.getPathfinder().getPath().size() - 1))) {
+                        setTarget(null);
+                        break;
+                    }
 
-                if (stuckCount > 10) {
-                    setTarget(null);
-                }
+                    //avoid tree attacking you in draynor
+                    checkIfStuck();
+                    if (stuckCount > 10) {
+                        var moveableTiles = Rs2Tile.getReachableTilesFromTile(Rs2Player.getWorldLocation(), 5).keySet().toArray(new WorldPoint[0]);
+                        walkMiniMap(moveableTiles[Random.random(0, moveableTiles.length)]);
+                        sleep(600, 1000);
+                    }
 
-                List<WorldPoint> path = ShortestPathPlugin.getPathfinder().getPath();
-                int indexOfStartPoint = getClosestTileIndex(path);
-                lastPosition = Rs2Player.getWorldLocation();
+                    if (ShortestPathPlugin.getPathfinder() == null) break;
 
-                if (Rs2Player.getWorldLocation().distanceTo(target) == 0)
-                    break;
+                    List<WorldPoint> path = ShortestPathPlugin.getPathfinder().getPath();
+                    int indexOfStartPoint = getClosestTileIndex(path);
+                    lastPosition = Rs2Player.getWorldLocation();
 
-                /**
-                 * MAIN WALK LOOP
-                 */
-                for (int i = indexOfStartPoint; i < ShortestPathPlugin.getPathfinder().getPath().size() - 1; i++) {
-                    WorldPoint currentWorldPoint = ShortestPathPlugin.getPathfinder().getPath().get(i);
-                    indexOfStartPoint = getClosestTileIndex(path);
+                    if (Rs2Player.getWorldLocation().distanceTo(target) == 0)
+                        break;
 
                     /**
-                     * CHECK DOORS
+                     * MAIN WALK LOOP
                      */
-                    Microbot.status = "Checking for doors...";
-                    long startTime = System.currentTimeMillis();
+                    boolean doorOrTransportResult = false;
+                    for (int i = indexOfStartPoint; i < path.size(); i++) {
+                        WorldPoint currentWorldPoint = path.get(i);
 
-                    boolean doorOrTransportResult = handleDoors(currentWorldPoint, ShortestPathPlugin.getPathfinder().getPath().get(i + 1));
-                    if (doorOrTransportResult) {
-                        break;
-                    }
-                    long endTime = System.currentTimeMillis();
-                    long totalTime = endTime - startTime;
-                    System.out.println("Handling doors took " + totalTime + "ms");
+                        if (i > 0 && !Rs2Tile.isTileReachable(path.get(i - 1)) && !Microbot.getClient().isInInstancedRegion()) {
+                            continue;
+                        }
 
-                    if (!Microbot.getClient().isInInstancedRegion()) {
-                        Microbot.status = "Checking for transports...";
-                        startTime = System.currentTimeMillis();
-                        doorOrTransportResult = handleTransports(path, indexOfStartPoint);
-                        endTime = System.currentTimeMillis();
-                        totalTime = endTime - startTime;
-                        System.out.println("Handling transports took " + totalTime + "ms");
-                    }
+                        /**
+                         * CHECK DOORS
+                         */
+                        Microbot.status = "Checking for doors...";
+                        long startTime = System.currentTimeMillis();
 
-                    if (doorOrTransportResult)
-                        break;
-
-                    System.out.println(currentWorldPoint.distanceTo2D(Rs2Player.getWorldLocation()));
-                    if (currentWorldPoint.distanceTo2D(Rs2Player.getWorldLocation()) > config.recalculateDistance()
-                            || Rs2Player.getWorldLocation().distanceTo(target) < 12 && currentWorldPoint.distanceTo2D(Rs2Player.getWorldLocation()) > distance) {
-                        // InstancedRegions require localPoint instead of worldpoint to navigate
-                        if (Microbot.getClient().isInInstancedRegion()) {
-                            Rs2Walker.walkFastCanvas(currentWorldPoint);
-                            sleep(600, 1000);
-                        } else {
-                            Rs2Walker.walkMiniMap(currentWorldPoint);
-                            int randomInt = Random.random(3, 5);
-                            sleepUntilTrue(() -> currentWorldPoint.distanceTo2D(Rs2Player.getWorldLocation()) < randomInt, 100, 2000);
+                        doorOrTransportResult = handleDoors(path, i);
+                        if (doorOrTransportResult) {
                             break;
                         }
-                        //avoid tree attacking you in draynor
-                        checkIfStuck();
+                        long endTime = System.currentTimeMillis();
+                        long totalTime = endTime - startTime;
+                        System.out.println("Handling doors took " + totalTime + "ms");
+
+                        if (!Microbot.getClient().isInInstancedRegion()) {
+                            Microbot.status = "Checking for transports...";
+                            startTime = System.currentTimeMillis();
+                            doorOrTransportResult = handleTransports(path, i);
+                            endTime = System.currentTimeMillis();
+                            totalTime = endTime - startTime;
+                            System.out.println("Handling transports took " + totalTime + "ms");
+                        }
+
+                        if (doorOrTransportResult)
+                            break;
+
+                        if (!Rs2Tile.isTileReachable(currentWorldPoint) && !Microbot.getClient().isInInstancedRegion()) {
+                            continue;
+                        }
+
+                        if (currentWorldPoint.distanceTo2D(Rs2Player.getWorldLocation()) > nextWalkingDistance) {
+                            nextWalkingDistance = Random.random(7, 11);
+                            // InstancedRegions require localPoint instead of worldpoint to navigate
+                            if (Microbot.getClient().isInInstancedRegion()) {
+                                Rs2Walker.walkFastCanvas(currentWorldPoint);
+                                sleep(600, 1000);
+                            } else {
+                                long movingStart = System.currentTimeMillis();
+                                Rs2Walker.walkMiniMap(getPointWithWallDistance(currentWorldPoint));
+                                int randomInt = Random.random(3, 5);
+                                sleepUntilTrue(() -> currentWorldPoint.distanceTo2D(Rs2Player.getWorldLocation()) < randomInt, 100, 2000);
+                                if (System.currentTimeMillis() - movingStart < 120) {
+                                    sleep(600, 1000);
+                                }
+                                break;
+                            }
+                        }
+                    }
+
+                    if (!doorOrTransportResult){
+                        var moveableTiles = Rs2Tile.getReachableTilesFromTile(path.get(path.size() - 1), Math.min(3, distance)).keySet().toArray(new WorldPoint[0]);
+                        var finalTile = moveableTiles.length > 0 ? moveableTiles[Random.random(0, moveableTiles.length)] : path.get(path.size() - 1);
+                        if (Rs2Tile.isTileReachable(finalTile)) {
+                            System.out.println("walk minimap");
+
+                            if (Microbot.getClient().isInInstancedRegion())
+                                Rs2Walker.walkFastCanvas(finalTile);
+                            else
+                                Rs2Walker.walkMiniMap(finalTile);
+
+                            sleep(600, 1200);
+                            System.out.println("sleep walk minimap");
+                        }
                     }
                 }
-
-                if (Rs2Player.getWorldLocation().distanceTo(target) < 10) {
-                    System.out.println("walk minimap");
-                    Rs2Walker.walkMiniMap(target);
-                    sleep(600, 1200);
-                    System.out.println("sleep walk minimap");
-                }
+                return Rs2Player.getWorldLocation().distanceTo(target) < distance;
+            } catch (Exception ex) {
+                if (ex instanceof InterruptedException) return false;
+                Microbot.log("Microbot Walker Exception " + ex.getMessage());
+                System.out.println(ex.getMessage());
+                ex.printStackTrace(System.out);
             }
-            return Rs2Player.getWorldLocation().distanceTo(target) < distance;
+            return false;
         });
         return false;
+    }
+
+    public static WorldPoint getPointWithWallDistance(WorldPoint target) {
+        var tiles = Rs2Tile.getReachableTilesFromTile(target, 1);
+
+        var localPoint = LocalPoint.fromWorld(Microbot.getClient().getTopLevelWorldView(), target);
+        if (Microbot.getClient().getCollisionMaps() != null && localPoint != null) {
+            int[][] flags = Microbot.getClient().getCollisionMaps()[Microbot.getClient().getPlane()].getFlags();
+
+            if (hasMinimapRelevantMovementFlag(localPoint, flags)) {
+                for (var tile : tiles.keySet()) {
+                    var localTilePoint = LocalPoint.fromWorld(Microbot.getClient().getTopLevelWorldView(), tile);
+                    if (localTilePoint == null)
+                        continue;
+
+                    if (!hasMinimapRelevantMovementFlag(localTilePoint, flags))
+                        return tile;
+                }
+            }
+
+            int data = flags[localPoint.getSceneX()][localPoint.getSceneY()];
+
+            Set<MovementFlag> movementFlags = MovementFlag.getSetFlags(data);
+
+            if (movementFlags.contains(MovementFlag.BLOCK_MOVEMENT_EAST)
+                    || movementFlags.contains(MovementFlag.BLOCK_MOVEMENT_WEST)
+                    || movementFlags.contains(MovementFlag.BLOCK_MOVEMENT_NORTH)
+                    || movementFlags.contains(MovementFlag.BLOCK_MOVEMENT_SOUTH)) {
+                for (var tile : tiles.keySet()) {
+                    var localTilePoint = LocalPoint.fromWorld(Microbot.getClient().getTopLevelWorldView(), tile);
+                    if (localTilePoint == null)
+                        continue;
+
+                    int tileData = flags[localTilePoint.getSceneX()][localTilePoint.getSceneY()];
+                    Set<MovementFlag> tileFlags = MovementFlag.getSetFlags(tileData);
+
+                    if (tileFlags.isEmpty())
+                        return tile;
+                }
+            }
+        }
+
+        return target;
+    }
+
+    static boolean hasMinimapRelevantMovementFlag(LocalPoint point, int[][] flagMap) {
+        int data = flagMap[point.getSceneX()][point.getSceneY()];
+        Set<MovementFlag> movementFlags = MovementFlag.getSetFlags(data);
+
+        if (movementFlags.contains(MovementFlag.BLOCK_MOVEMENT_EAST)
+                && Rs2Tile.isWalkable(point.dx(1)))
+            return true;
+
+        if (movementFlags.contains(MovementFlag.BLOCK_MOVEMENT_WEST)
+                && Rs2Tile.isWalkable(point.dx(-1)))
+            return true;
+
+        if (movementFlags.contains(MovementFlag.BLOCK_MOVEMENT_NORTH)
+                && Rs2Tile.isWalkable(point.dy(1)))
+            return true;
+
+        return movementFlags.contains(MovementFlag.BLOCK_MOVEMENT_SOUTH)
+                && Rs2Tile.isWalkable(point.dy(-1));
     }
 
     public static boolean walkMiniMap(WorldPoint worldPoint, int zoomDistance) {
@@ -170,6 +285,12 @@ public class Rs2Walker {
         return walkMiniMap(worldPoint, 5);
     }
 
+    public static boolean walkMiniMap(WorldArea area) {
+        var points = area.toWorldPointList();
+        var index = new java.util.Random().nextInt(points.size());
+        return Rs2Walker.walkMiniMap(points.get(index));
+    }
+
     /**
      * Used in instances like vorkath, jad
      *
@@ -185,7 +306,11 @@ public class Rs2Walker {
     }
 
     public static void walkFastCanvas(WorldPoint worldPoint) {
-        Rs2Player.toggleRunEnergy(true);
+        walkFastCanvas(worldPoint, true);
+    }
+
+    public static void walkFastCanvas(WorldPoint worldPoint, boolean toogleRun) {
+        Rs2Player.toggleRunEnergy(toogleRun);
         Point canv;
         if (Microbot.getClient().isInInstancedRegion()) {
             worldPoint = WorldPoint.toLocalInstance(Microbot.getClient(), worldPoint).stream().findFirst().get();
@@ -213,17 +338,41 @@ public class Rs2Walker {
     }
 
     // takes an avg 200-300 ms
+    // Used mainly for agility, might have to tweak this for other stuff
+    public static boolean canReach(WorldPoint worldPoint, int sizeX, int sizeY, int pathSizeX, int pathSizeY) {
+        Pathfinder pathfinder = new Pathfinder(ShortestPathPlugin.getPathfinderConfig(), Rs2Player.getWorldLocation(), worldPoint);
+        pathfindingExecutor.submit(pathfinder);
+        sleepUntil(pathfinder::isDone);
+        WorldArea pathArea = new WorldArea(pathfinder.getPath().get(pathfinder.getPath().size() - 1), pathSizeX, pathSizeY);
+        WorldArea objectArea = new WorldArea(worldPoint, sizeX + 2, sizeY + 2);
+        boolean result = pathArea
+                .intersectsWith2D(objectArea);
+        return result;
+    }
+
+    // takes an avg 200-300 ms
+    // Used mainly for agility, might have to tweak this for other stuff
     public static boolean canReach(WorldPoint worldPoint, int sizeX, int sizeY) {
         Pathfinder pathfinder = new Pathfinder(ShortestPathPlugin.getPathfinderConfig(), Rs2Player.getWorldLocation(), worldPoint);
         pathfindingExecutor.submit(pathfinder);
         sleepUntil(pathfinder::isDone);
-        boolean result = new WorldArea(pathfinder.getPath().get(pathfinder.getPath().size() - 1), 2, 2)
-                .intersectsWith(new WorldArea(worldPoint, sizeX + 2, sizeY + 2));
+        WorldArea pathArea = new WorldArea(pathfinder.getPath().get(pathfinder.getPath().size() - 1), 3, 3);
+        WorldArea objectArea = new WorldArea(worldPoint, sizeX + 2, sizeY + 2);
+        boolean result = pathArea
+                .intersectsWith2D(objectArea);
         return result;
     }
 
     public static boolean canReach(WorldPoint worldPoint) {
-        return canReach(worldPoint, 1, 1);
+        Pathfinder pathfinder = new Pathfinder(ShortestPathPlugin.getPathfinderConfig(), Rs2Player.getWorldLocation(), worldPoint);
+        pathfindingExecutor.submit(pathfinder);
+        sleepUntil(pathfinder::isDone);
+        if (pathfinder.getPath().get(pathfinder.getPath().size() - 1).getPlane() != worldPoint.getPlane()) return false;
+        WorldArea pathArea = new WorldArea(pathfinder.getPath().get(pathfinder.getPath().size() - 1), 2, 2);
+        WorldArea objectArea = new WorldArea(worldPoint, 2, 2);
+        boolean result = pathArea
+                .intersectsWith2D(objectArea);
+        return result;
     }
 
     public static boolean isCloseToRegion(int distance, int regionX, int regionY) {
@@ -244,38 +393,92 @@ public class Rs2Walker {
         return worldPoint.distanceTo(Microbot.getClient().getLocalPlayer().getWorldLocation());
     }
 
-    /**
-     * @param currentWorldPoint
-     * @param nextWorldPoint
-     * @return
-     */
-    private static boolean handleDoors(WorldPoint currentWorldPoint, WorldPoint nextWorldPoint) {
+    private static boolean handleDoors(List<WorldPoint> path, int index) {
 
         if (ShortestPathPlugin.getPathfinder() == null) return false;
 
-        if (nextWorldPoint == null) return false;
+        if (index == path.size() - 1) return false;
 
-        boolean hasDoor = isDoorPresent(currentWorldPoint, nextWorldPoint);
+        var doorActions = Arrays.asList("pay-toll", "pick-lock", "walk-through", "go-through", "open");
 
-        if (!hasDoor) return false;
+        // Check this and the next tile for door objects
+        for (int doorIndex = index; doorIndex < index + 2; doorIndex++){
+            var point = path.get(doorIndex);
 
-        WallObject wallObject = null;
-        Tile currentTile = getTile(currentWorldPoint);
-        if (currentTile != null) {
-            wallObject = currentTile.getWallObject();
-        }
-        if (wallObject == null) {
-            Tile nextTile = getTile(nextWorldPoint);
-            if (nextTile != null) {
-                wallObject = nextTile.getWallObject();
+            // Handle wall and game objects
+            TileObject object = null;
+            var tile = Rs2GameObject.getTiles(3).stream()
+                    .filter(x -> x.getWorldLocation().equals(point))
+                    .findFirst().orElse(null);
+            if (tile != null)
+                object = tile.getWallObject();
+
+            if (object == null)
+                object = Rs2GameObject.getGameObject(point);
+
+            if (object == null) continue;
+
+            var objectComp = Rs2GameObject.getObjectComposition(object.getId());
+            if (objectComp == null) continue;
+
+            // Match action
+            var action = Arrays.stream(objectComp.getActions())
+                    .filter(x -> x != null && doorActions.stream().anyMatch(doorAction -> x.toLowerCase().startsWith(doorAction)))
+                    .min(Comparator.comparing(x -> doorActions.indexOf(
+                            doorActions.stream().filter(doorAction -> x.toLowerCase().startsWith(doorAction)).findFirst().orElse(""))))
+                    .orElse(null);
+
+            if (action == null) continue;
+
+            boolean found = false;
+            if (object instanceof WallObject){
+                // Match wall objects by orientation
+                var orientation = ((WallObject) object).getOrientationA();
+
+                if (doorIndex == index){
+                    // Forward
+                    var neighborPoint = path.get(doorIndex + 1);
+                    if (orientation == 1 && point.dx(-1).getX() == neighborPoint.getX()
+                            || orientation == 4 && point.dx(+1).getX() == neighborPoint.getX()
+                            || orientation == 2 && point.dy(1).getY() == neighborPoint.getY()
+                            || orientation == 8 && point.dy(-1).getY() == neighborPoint.getY())
+                        found = true;
+                } else if (doorIndex == index + 1){
+                    // Backward
+                    var neighborPoint = path.get(doorIndex - 1);
+                    if (orientation == 1 && point.dx(-1).getX() == neighborPoint.getX()
+                            || orientation == 4 && point.dx(+1).getX() == neighborPoint.getX()
+                            || orientation == 2 && point.dy(1).getY() == neighborPoint.getY()
+                            || orientation == 8 && point.dy(-1).getY() == neighborPoint.getY())
+                        found = true;
+
+                    // Diagonal objects with any orientation
+                    if (index + 2 < path.size() && (orientation == 16 || orientation == 32 || orientation == 64 || orientation == 128)){
+                        var prevPoint = path.get(doorIndex - 1);
+                        var nextPoint = path.get(doorIndex + 1);
+
+                        if (Math.abs(prevPoint.getX() - nextPoint.getX()) > 0 && Math.abs(prevPoint.getY() - nextPoint.getY()) > 0)
+                            found = true;
+                    }
+                }
+            } else if (object instanceof GameObject){
+                // Match game objects by name
+                // Orientation does not work as game objects are not strictly oriented like walls
+                var objectNames = Arrays.asList("door");
+
+                if (objectNames.contains(objectComp.getName().toLowerCase()))
+                    found = true;
+            }
+
+
+            if (found){
+                System.out.println(action);
+                Rs2GameObject.interact(object, action);
+                Rs2Player.waitForWalking();
+                return true;
             }
         }
 
-        if (wallObject != null && Rs2Camera.isTileOnScreen(wallObject)) {
-            Rs2GameObject.interact(wallObject);
-            Rs2Player.waitForWalking();
-            return true;
-        }
         return false;
     }
 
@@ -286,8 +489,15 @@ public class Rs2Walker {
     public static int getClosestTileIndex(List<WorldPoint> path) {
         WorldPoint startPoint;
 
+        var tiles = Rs2Tile.getReachableTilesFromTile(Rs2Player.getWorldLocation(), 20);
+
         startPoint = path.stream()
-                .min(Comparator.comparingInt(a -> Math.abs(a.distanceTo(Rs2Player.getWorldLocation()))))
+                .min(Comparator.comparingInt(a -> {
+                    if (tiles.containsKey(a))
+                        return tiles.get(a);
+
+                    return Integer.MAX_VALUE;
+                }))
                 .orElse(null);
 
         return IntStream.range(0, path.size())
@@ -297,20 +507,10 @@ public class Rs2Walker {
     }
 
     /**
-     * @param start
-     */
-    public void setStart(WorldPoint start) {
-        if (ShortestPathPlugin.getPathfinder() == null) {
-            return;
-        }
-        ShortestPathPlugin.setStartPointSet(true);
-        restartPathfinding(start, ShortestPathPlugin.getPathfinder().getTarget());
-    }
-
-    /**
      * @param target
      */
     public static void setTarget(WorldPoint target) {
+        if (!Microbot.isLoggedIn()) return;
         Player localPlayer = Microbot.getClient().getLocalPlayer();
         if (!ShortestPathPlugin.isStartPointSet() && localPlayer == null) {
             return;
@@ -324,7 +524,6 @@ public class Rs2Walker {
                     ShortestPathPlugin.getPathfinder().cancel();
                 }
                 ShortestPathPlugin.setPathfinder(null);
-                System.out.println("reset path finder!");
             }
 
             Microbot.getWorldMapPointManager().remove(ShortestPathPlugin.getMarker());
@@ -377,115 +576,6 @@ public class Rs2Walker {
     }
 
     /**
-     * TODO: REFACTOR DUPLICATE CODE
-     *
-     * @param a
-     * @param b
-     * @return
-     */
-    public static boolean isDoorPresent(WorldPoint a, WorldPoint b) {
-        Tile currentTile = getTile(a);
-        WallObject wallObject;
-        if (currentTile != null) {
-            wallObject = currentTile.getWallObject();
-        } else {
-            wallObject = null;
-        }
-//        if (wallObject == null)
-//            return false;
-
-        System.out.println("checking door: " + a + " b " + b);
-        if (wallObject != null) {
-            ObjectComposition objectComposition = Rs2GameObject.getObjectComposition(wallObject.getId());
-            if (objectComposition == null) {
-                return false;
-            }
-            boolean found = false;
-            for (String action : objectComposition.getActions()) {
-                if (action != null && (action.equals("Open") || action.contains("pay-toll"))) {
-                    found = true;
-                    break;
-                }
-            }
-            if (!found) {
-                return false;
-            }
-            int orientation = wallObject.getOrientationA();
-            if (orientation == 1) {
-                //blocks west
-                if (a.dx(-1).equals(b)) {
-                    return true;
-                }
-            }
-            if (orientation == 4) {
-                //blocks east
-                if (a.dx(+1).equals(b)) {
-                    return true;
-                }
-            }
-            if (orientation == 2) {
-                //blocks north
-                if (a.dy(1).equals(b)) {
-                    return true;
-                }
-            }
-            if (orientation == 8) {
-                //blocks south
-                return a.dy(-1).equals(b);
-            }
-        }
-
-        Tile nextTile = getTile(b);
-        WallObject wallObjectb;
-        if (nextTile != null) {
-            wallObjectb = nextTile.getWallObject();
-        } else {
-            wallObjectb = null;
-        }
-        if (wallObjectb == null) {
-            return false;
-        }
-        ObjectComposition objectCompositionb = Rs2GameObject.getObjectComposition(wallObjectb.getId());
-        if (objectCompositionb == null) {
-            return false;
-        }
-        boolean foundb = false;
-        for (String action : objectCompositionb.getActions()) {
-            if (action != null && (action.equals("Open") || action.contains("pay-toll"))) {
-                foundb = true;
-                break;
-            }
-        }
-        if (!foundb) {
-            return false;
-        }
-        int orientationb = wallObjectb.getOrientationA();
-        if (orientationb == 1) {
-            //blocks east
-            if (b.dx(-1).equals(a)) {
-                return true;
-            }
-        }
-        if (orientationb == 4) {
-            //blocks south
-            if (b.dx(+1).equals(a)) {
-                return true;
-            }
-        }
-        if (orientationb == 2) {
-            //blocks south
-            if (b.dy(+1).equals(a)) {
-                return true;
-            }
-        }
-        if (orientationb == 8) {
-            //blocks north
-            return b.dy(-1).equals(a);
-        }
-        return false;
-    }
-
-    /**
      * @param point
      * @return
      */
@@ -509,73 +599,112 @@ public class Rs2Walker {
      * @return
      */
     public static boolean handleTransports(List<WorldPoint> path, int indexOfStartPoint) {
-        for (WorldPoint a : ShortestPathPlugin.getTransports().keySet()
-                .stream()
-                .filter(x -> x.distanceTo(Rs2Player.getWorldLocation()) <= 12)
-                .sorted(Comparator.comparingInt(worldPoint -> worldPoint.distanceTo(Rs2Player.getWorldLocation())))
-                .collect(Collectors.toList())) {
+        for (Transport b : ShortestPathPlugin.getTransports().getOrDefault(path.get(indexOfStartPoint), new ArrayList<>())) {
+            for (WorldPoint origin : WorldPoint.toLocalInstance(Microbot.getClient(), b.getOrigin())) {
 
-            for (Transport b : ShortestPathPlugin.getTransports().getOrDefault(a, new ArrayList<>())) {
-                for (WorldPoint origin : WorldPoint.toLocalInstance(Microbot.getClient(), b.getOrigin())) {
+                if (Rs2Player.getWorldLocation().getPlane() != b.getOrigin().getPlane()) {
+                    continue;
+                }
 
-                    if (Rs2Player.getWorldLocation().getPlane() != b.getOrigin().getPlane()) {
+                for (int i = indexOfStartPoint; i < path.size(); i++) {
+                    if (origin.getPlane() != Rs2Player.getWorldLocation().getPlane())
                         continue;
-                    }
+                    if (path.stream().noneMatch(x -> x.equals(b.getDestination()))) continue;
 
-                    for (int i = indexOfStartPoint; i < path.size(); i++) {
-                        if (origin.getPlane() != Rs2Player.getWorldLocation().getPlane())
-                            continue;
-                        if (path.stream().noneMatch(x -> x.equals(b.getDestination()))) continue;
+                    int indexOfOrigin = IntStream.range(0, path.size())
+                            .filter(f -> path.get(f).equals(b.getOrigin()))
+                            .findFirst()
+                            .orElse(-1);
+                    int indexOfDestination = IntStream.range(0, path.size())
+                            .filter(f -> path.get(f).equals(b.getDestination()))
+                            .findFirst()
+                            .orElse(-1);
+                    if (indexOfDestination == -1) continue;
+                    if (indexOfOrigin == -1) continue;
+                    if (indexOfDestination < indexOfOrigin) continue;
 
-                        int indexOfOrigin = IntStream.range(0, path.size())
-                                .filter(f -> path.get(f).equals(b.getOrigin()))
-                                .findFirst()
-                                .orElse(-1);
-                        int indexOfDestination = IntStream.range(0, path.size())
-                                .filter(f -> path.get(f).equals(b.getDestination()))
-                                .findFirst()
-                                .orElse(-1);
-                        if (indexOfDestination == -1) continue;
-                        if (indexOfOrigin == -1) continue;
-                        if (indexOfDestination < indexOfOrigin) continue;
-
-                        if (path.get(i).equals(origin)) {
-
-                            if (b.getDestination().distanceTo2D(Rs2Player.getWorldLocation()) > 20) {
-                                handleTrapdoor(b);
+                    if (path.get(i).equals(origin)) {
+                        if (b.isShip() || b.isNpc() || b.isBoat()) {
+                            var npcAndAction = String.format("%s %s", b.getAction(), b.getNpcName());
+                            NPC npc = null;
+                            String action = "";
+                            for (int n = npcAndAction.indexOf(" "); n >= 0; n = npcAndAction.indexOf(" ", n + 1)){
+                                npc = Rs2Npc.getNpc(npcAndAction.substring(n + 1));
+                                if (npc != null){
+                                    action = npcAndAction.substring(0, n);
+                                    break;
+                                }
                             }
 
-                            GameObject gameObject = Rs2GameObject.getGameObjects(b.getObjectId(), b.getOrigin()).stream().findFirst().orElse(null);
-
-                            if (gameObject != null && gameObject.getId() == b.getObjectId() && Rs2Camera.isTileOnScreen(gameObject)) {
-                                if (Rs2GameObject.hasLineOfSight(gameObject)) {
-                                    Rs2GameObject.interact(gameObject, b.getAction());
-                                    sleep(1200, 1600);
-                                    return true;
-                                } else {
-                                    Rs2Walker.walkFastCanvas(path.get(i));
-                                    sleep(1200, 1600);
-                                }
+                            if (Rs2Npc.canWalkTo(npc, 20)){
+                                Rs2Npc.interact(npc, action);
+                                Rs2Player.waitForWalking();
                             } else {
-                                GroundObject groundObject = Rs2GameObject.getGroundObjects(b.getObjectId(), b.getOrigin()).stream().filter(x -> !x.getWorldLocation().equals(Rs2Player.getWorldLocation())).findFirst().orElse(null);
-                                if (groundObject != null && groundObject.getId() == b.getObjectId() && Rs2Camera.isTileOnScreen(groundObject)) {
-                                    if (Rs2GameObject.hasLineOfSight(groundObject)) {
-                                        Rs2GameObject.interact(groundObject, b.getAction());
-                                        if (b.isAgilityShortcut()) {
-                                            Rs2Player.waitForAnimation();
-                                        }
-                                        sleep(1200, 1600);
-                                        return true;
-                                    } else {
-                                        Rs2Walker.walkFastCanvas(path.get(i));
-                                        sleep(1200, 1600);
-                                    }
-                                }
+                                Rs2Walker.walkFastCanvas(path.get(i));
+                                sleep(1200, 1600);
                             }
                         }
+                    }
 
+                    if (b.getDestination().distanceTo2D(Rs2Player.getWorldLocation()) > 20) {
+                        handleTrapdoor(b);
+                    }
+
+                    if (b.isSpiritTree()) {
+                        b.handleSpiritTree();
+                    }
+
+
+                    if (b.isGnomeGlider()) {
+                        b.handleGlider();
+                    }
+
+                    if (b.isFairyRing() && !Rs2Player.getWorldLocation().equals(b.getDestination())) {
+                        b.handleFairyRing();
+                    }
+
+
+                    GameObject gameObject = Rs2GameObject.getGameObjects(b.getObjectId(), b.getOrigin()).stream().findFirst().orElse(null);
+
+                    //check game objects
+                    if (gameObject != null && gameObject.getId() == b.getObjectId()) {
+                        boolean interact = Rs2GameObject.interact(gameObject, b.getAction(), true);
+                        if (!interact) {
+                            Rs2Walker.walkMiniMap(path.get(i));
+                            sleep(1600, 2000);
+                            return true;
+                        }
+                        Rs2Player.waitForWalking();
+                        return true;
+                    }
+
+                        //check tile objects
+                        List<TileObject> tileObjects = Rs2GameObject.getTileObjects(b.getObjectId(), b.getOrigin());
+                        TileObject tileObject = tileObjects.stream().findFirst().orElse(null);
+                        if (tileObject instanceof GroundObject)
+                            tileObject = tileObjects.stream()
+                                    .filter(x -> !x.getWorldLocation().equals(Rs2Player.getWorldLocation()))
+                                    .min(Comparator.comparing(x -> ((TileObject)x).getWorldLocation().distanceTo(b.getOrigin()))
+                                            .thenComparing(x -> ((TileObject)x).getWorldLocation().distanceTo(b.getDestination()))).orElse(null);
+
+                        if (tileObject != null && tileObject.getId() == b.getObjectId()) {
+                            boolean checkCanReach = tileObject.getId() != 16533;
+                            boolean interact = Rs2GameObject.interact(tileObject, b.getAction(), checkCanReach);
+                        if (!interact) {
+                            Rs2Walker.walkMiniMap(path.get(i));
+                            sleep(1600, 2000);
+                            return true;
+                        }
+                        if (b.isAgilityShortcut()) {
+                            Rs2Player.waitForAnimation();
+                        } else {
+                            Rs2Player.waitForWalking();
+                        }
+                        return true;
                     }
                 }
+
+
             }
         }
         return false;
@@ -610,6 +739,34 @@ public class Rs2Walker {
         return false;
     }
 
+    /**
+     * Checks if the player's current location is within the specified area defined by the given world points.
+     *
+     * @param worldPoints an array of two world points of the NW and SE corners of the area
+     * @return true if the player's current location is within the specified area, false otherwise
+     */
+    public static boolean isInArea(WorldPoint... worldPoints) {
+        WorldPoint playerLocation = Rs2Player.getWorldLocation();
+        return playerLocation.getX() <= worldPoints[0].getX() &&   // NW corner x
+                playerLocation.getY() >= worldPoints[0].getY() &&   // NW corner y
+                playerLocation.getX() >= worldPoints[1].getX() &&   // SE corner x
+                playerLocation.getY() <= worldPoints[1].getY();     // SE corner Y
+        // draws box from 2 points to check against all variations of player X,Y from said points.
+    }
+
+    /**
+     * Checks if the player's current location is within the specified range from the given center point.
+     *
+     * @param centerOfArea a WorldPoint which is the center of the desired area,
+     * @param range        an int of range to which the boundaries will be drawn in a square,
+     * @return true if the player's current location is within the specified area, false otherwise
+     */
+    public static boolean isInArea(WorldPoint centerOfArea, int range) {
+        WorldPoint nwCorner = new WorldPoint(centerOfArea.getX() + range + range, centerOfArea.getY() - range, centerOfArea.getPlane());
+        WorldPoint seCorner = new WorldPoint(centerOfArea.getX() - range - range, centerOfArea.getY() + range, centerOfArea.getPlane());
+        return isInArea(nwCorner, seCorner); // call to our sibling
+    }
+
     public static boolean isNear() {
         WorldPoint playerLocation = Rs2Player.getWorldLocation();
         int index = IntStream.range(0, ShortestPathPlugin.getPathfinder().getPath().size())
@@ -633,5 +790,31 @@ public class Rs2Walker {
         } else {
             stuckCount = 0;
         }
+    }
+
+    /**
+     * @param start
+     */
+    public void setStart(WorldPoint start) {
+        if (ShortestPathPlugin.getPathfinder() == null) {
+            return;
+        }
+        ShortestPathPlugin.setStartPointSet(true);
+        restartPathfinding(start, ShortestPathPlugin.getPathfinder().getTarget());
+    }
+
+    /**
+     * Checks the distance between startpoint and endpoint using ShortestPath
+     * 
+     * @param startpoint
+     * @param endpoint
+     * @return distance
+     */
+    public static int getDistanceBetween(WorldPoint startpoint, WorldPoint endpoint) {
+        ExecutorService pathfindingExecutor = Executors.newSingleThreadExecutor();
+        Pathfinder pathfinder = new Pathfinder(ShortestPathPlugin.getPathfinderConfig(), startpoint, endpoint);
+        pathfindingExecutor.submit(pathfinder);
+        sleepUntil(pathfinder::isDone);
+        return pathfinder.getPath().size();
     }
 }

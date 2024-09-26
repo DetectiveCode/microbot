@@ -27,45 +27,6 @@ package net.runelite.client.plugins.config;
 
 import com.google.common.base.CharMatcher;
 import com.google.common.base.Strings;
-import java.awt.Component;
-import java.awt.Dimension;
-import java.awt.GridLayout;
-import java.awt.event.ActionEvent;
-import java.awt.event.KeyAdapter;
-import java.awt.event.KeyEvent;
-import java.awt.event.MouseAdapter;
-import java.awt.event.MouseEvent;
-import java.awt.image.BufferedImage;
-import java.io.File;
-import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.StandardCopyOption;
-import java.util.ArrayList;
-import java.util.Comparator;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.concurrent.ScheduledExecutorService;
-import javax.inject.Inject;
-import javax.swing.AbstractAction;
-import javax.swing.GroupLayout;
-import javax.swing.ImageIcon;
-import javax.swing.JButton;
-import javax.swing.JFileChooser;
-import javax.swing.JLabel;
-import javax.swing.JOptionPane;
-import javax.swing.JPanel;
-import javax.swing.JTextField;
-import javax.swing.JToggleButton;
-import javax.swing.KeyStroke;
-import javax.swing.SwingUtilities;
-import javax.swing.border.EmptyBorder;
-import javax.swing.border.MatteBorder;
-import javax.swing.filechooser.FileNameExtensionFilter;
-import javax.swing.text.AbstractDocument;
-import javax.swing.text.AttributeSet;
-import javax.swing.text.BadLocationException;
-import javax.swing.text.DocumentFilter;
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.client.RuneLite;
@@ -105,29 +66,27 @@ import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.StandardCopyOption;
-import java.util.Comparator;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
+import java.util.*;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 
 @Slf4j
 class ProfilePanel extends PluginPanel {
-    private static final int MAX_PROFILES = 20;
+    private static final int MAX_PROFILES = 100;
 
-	private static final ImageIcon ADD_ICON = new ImageIcon(ImageUtil.loadImageResource(ScreenMarkerPlugin.class, "add_icon.png"));
-	private static final ImageIcon DELETE_ICON = new ImageIcon(ImageUtil.loadImageResource(ProfilePanel.class, "mdi_delete.png"));
-	private static final ImageIcon EXPORT_ICON = new ImageIcon(ImageUtil.loadImageResource(ProfilePanel.class, "mdi_export.png"));
-	private static final ImageIcon RENAME_ICON;
-	private static final ImageIcon RENAME_ACTIVE_ICON;
-	private static final ImageIcon CLONE_ICON = new ImageIcon(ImageUtil.loadImageResource(ProfilePanel.class, "mdi_content-duplicate.png"));
-	private static final ImageIcon LINK_ICON;
-	private static final ImageIcon LINK_ACTIVE_ICON;
-	private static final ImageIcon ARROW_RIGHT_ICON = new ImageIcon(ImageUtil.loadImageResource(ProfilePanel.class, "/util/arrow_right.png"));
-	private static final ImageIcon SYNC_ICON;
-	private static final ImageIcon SYNC_ACTIVE_ICON;
+    private static final ImageIcon ADD_ICON = new ImageIcon(ImageUtil.loadImageResource(ScreenMarkerPlugin.class, "add_icon.png"));
+    private static final ImageIcon DELETE_ICON = new ImageIcon(ImageUtil.loadImageResource(ProfilePanel.class, "mdi_delete.png"));
+    private static final ImageIcon EXPORT_ICON = new ImageIcon(ImageUtil.loadImageResource(ProfilePanel.class, "mdi_export.png"));
+    private static final ImageIcon RENAME_ICON;
+    private static final ImageIcon RENAME_ACTIVE_ICON;
+    private static final ImageIcon CLONE_ICON = new ImageIcon(ImageUtil.loadImageResource(ProfilePanel.class, "mdi_content-duplicate.png"));
+    private static final ImageIcon LINK_ICON;
+    private static final ImageIcon LINK_ACTIVE_ICON;
+    private static final ImageIcon ARROW_RIGHT_ICON = new ImageIcon(ImageUtil.loadImageResource(ProfilePanel.class, "/util/arrow_right.png"));
+    private static final ImageIcon SYNC_ICON;
+    private static final ImageIcon SYNC_ACTIVE_ICON;
 
     private final ConfigManager configManager;
     private final ProfileManager profileManager;
@@ -150,14 +109,14 @@ class ProfilePanel extends PluginPanel {
         RENAME_ICON = new ImageIcon(rename);
         RENAME_ACTIVE_ICON = new ImageIcon(ImageUtil.recolorImage(rename, ColorScheme.BRAND_ORANGE));
 
-		BufferedImage link = ImageUtil.loadImageResource(ProfilePanel.class, "/util/link.png");
-		LINK_ICON = new ImageIcon(link);
-		LINK_ACTIVE_ICON = new ImageIcon(ImageUtil.recolorImage(link, ColorScheme.BRAND_ORANGE));
+        BufferedImage link = ImageUtil.loadImageResource(ProfilePanel.class, "/util/link.png");
+        LINK_ICON = new ImageIcon(link);
+        LINK_ACTIVE_ICON = new ImageIcon(ImageUtil.recolorImage(link, ColorScheme.BRAND_ORANGE));
 
-		BufferedImage sync = ImageUtil.loadImageResource(ProfilePanel.class, "cloud_sync.png");
-		SYNC_ICON = new ImageIcon(sync);
-		SYNC_ACTIVE_ICON = new ImageIcon(ImageUtil.recolorImage(sync, ColorScheme.BRAND_ORANGE));
-	}
+        BufferedImage sync = ImageUtil.loadImageResource(ProfilePanel.class, "cloud_sync.png");
+        SYNC_ICON = new ImageIcon(sync);
+        SYNC_ACTIVE_ICON = new ImageIcon(ImageUtil.recolorImage(sync, ColorScheme.BRAND_ORANGE));
+    }
 
     @Inject
     ProfilePanel(
@@ -177,7 +136,7 @@ class ProfilePanel extends PluginPanel {
         setLayout(layout);
 
         profilesList = new DragAndDropReorderPane();
-        profilesList.addDragListener(this::handleDrag);
+        //profilesList.addDragListener(this::handleDrag);
 
         addButton = new JButton("New Profile", ADD_ICON);
         addButton.addActionListener(ev -> createProfile());
@@ -268,24 +227,20 @@ class ProfilePanel extends PluginPanel {
         });
     }
 
-	@Subscribe
-	private void onRuneScapeProfileChanged(RuneScapeProfileChanged ev)
-	{
-		if (!active)
-		{
-			return;
-		}
+    @Subscribe
+    private void onRuneScapeProfileChanged(RuneScapeProfileChanged ev) {
+        if (!active) {
+            return;
+        }
 
-		reload();
-	}
+        reload();
+    }
 
-	@Subscribe
-	public void onSessionOpen(SessionOpen sessionOpen)
-	{
-		if (!active)
-		{
-			return;
-		}
+    @Subscribe
+    public void onSessionOpen(SessionOpen sessionOpen) {
+        if (!active) {
+            return;
+        }
 
         reload();
     }
@@ -316,27 +271,27 @@ class ProfilePanel extends PluginPanel {
             Map<Long, ProfileCard> prevCards = cards;
             cards = new HashMap<>();
 
-			long activePanel = configManager.getProfile().getId();
-			final String rsProfileKey = configManager.getRSProfileKey();
-			boolean limited = profiles.stream().filter(v -> !v.isInternal()).count() >= MAX_PROFILES;
+            long activePanel = configManager.getProfile().getId();
+            final String rsProfileKey = configManager.getRSProfileKey();
+            boolean limited = profiles.stream().filter(v -> !v.isInternal()).count() >= MAX_PROFILES;
 
             for (ConfigProfile profile : profiles) {
                 if (profile.isInternal()) {
                     continue;
                 }
 
-				ProfileCard prev = prevCards.get(profile.getId());
-				final long id = profile.getId();
-				final List<String> defaultForRsProfiles = profile.getDefaultForRsProfiles();
-				ProfileCard pc = new ProfileCard(
-					profile,
-					activePanel == id,
-					defaultForRsProfiles != null && defaultForRsProfiles.contains(rsProfileKey),
-					limited,
-					prev);
-				cards.put(profile.getId(), pc);
-				profilesList.add(pc);
-			}
+                ProfileCard prev = prevCards.get(profile.getId());
+                final long id = profile.getId();
+                final List<String> defaultForRsProfiles = profile.getDefaultForRsProfiles();
+                ProfileCard pc = new ProfileCard(
+                        profile,
+                        activePanel == id,
+                        defaultForRsProfiles != null && defaultForRsProfiles.contains(rsProfileKey),
+                        limited,
+                        prev);
+                cards.put(profile.getId(), pc);
+                profilesList.add(pc);
+            }
 
             addButton.setEnabled(!limited);
             importButton.setEnabled(!limited);
@@ -345,27 +300,177 @@ class ProfilePanel extends PluginPanel {
         });
     }
 
-	private class ProfileCard extends JPanel
-	{
-		private static final int CARD_WIDTH = 227;
-		private static final int LEFT_BORDER_WIDTH = 4;
-		private static final int LEFT_GAP = 4;
+    private void renameProfile(long id, String name) {
+        try (ProfileManager.Lock lock = profileManager.lock()) {
+            ConfigProfile profile = lock.findProfile(id);
+            if (profile == null) {
+                log.warn("rename for nonexistent profile {}", id);
+                // maybe profile was removed by another client, reload the panel
+                reload(lock.getProfiles());
+                return;
+            }
 
-		private final ConfigProfile profile;
-		private final JButton delete;
-		private final JTextField name;
+            log.info("Renaming profile {} ({}) to {}", profile, profile.getId(), name);
+
+            lock.renameProfile(profile, name);
+            configManager.renameProfile(profile, name);
+
+            reload(lock.getProfiles());
+        }
+    }
+
+    private void createProfile() {
+        try (ProfileManager.Lock lock = profileManager.lock()) {
+            String name = "New Profile";
+            int number = 1;
+            while (lock.findProfile(name) != null) {
+                name = "New Profile (" + (number++) + ")";
+            }
+
+            log.info("Creating new profile: {}", name);
+            lock.createProfile(name);
+
+            reload(lock.getProfiles());
+        }
+    }
+
+    private void deleteProfile(ConfigProfile profile) {
+        log.info("Deleting profile {}", profile.getName());
+
+        // disabling sync causes the profile to be deleted
+        configManager.toggleSync(profile, false);
+
+        try (ProfileManager.Lock lock = profileManager.lock()) {
+            lock.removeProfile(profile.getId());
+
+            reload(lock.getProfiles());
+        }
+    }
+
+    private void unsetRsProfileDefaultProfile() {
+        setRsProfileDefaultProfile(-1);
+    }
+
+    private void switchToProfile(long id) {
+        ConfigProfile profile;
+        try (ProfileManager.Lock lock = profileManager.lock()) {
+            profile = lock.findProfile(id);
+            if (profile == null) {
+                log.warn("change to nonexistent profile {}", id);
+                // maybe profile was removed by another client, reload the panel
+                reload(lock.getProfiles());
+                return;
+            }
+
+            log.debug("Switching profile to {}", profile.getName());
+
+            // change active profile
+            lock.getProfiles().forEach(p -> p.setActive(false));
+            profile.setActive(true);
+            lock.dirty();
+        }
+
+        executor.submit(() -> configManager.switchProfile(profile));
+    }
+
+    private void setRsProfileDefaultProfile(long id) {
+        executor.submit(() ->
+        {
+            boolean switchProfile = false;
+            try (ProfileManager.Lock lock = profileManager.lock()) {
+                final String rsProfileKey = configManager.getRSProfileKey();
+                if (rsProfileKey == null) {
+                    return;
+                }
+
+                for (final ConfigProfile profile : lock.getProfiles()) {
+                    final List<String> defaultForRsProfiles = profile.getDefaultForRsProfiles();
+                    if (defaultForRsProfiles == null) {
+                        continue;
+                    }
+                    if (profile.getDefaultForRsProfiles().remove(rsProfileKey)) {
+                        lock.dirty();
+                    }
+                }
+
+                if (id == -1) {
+                    log.debug("Unsetting default profile for rsProfile {}", rsProfileKey);
+                } else {
+                    final ConfigProfile profile = lock.findProfile(id);
+                    if (profile == null) {
+                        log.warn("setting nonexistent profile {} as default for rsprofile", id);
+                        // maybe profile was removed by another client, reload the panel
+                        reload(lock.getProfiles());
+                        return;
+                    }
+
+                    log.debug("Setting profile {} as default for rsProfile {}", profile.getName(), rsProfileKey);
+
+                    if (profile.getDefaultForRsProfiles() == null) {
+                        profile.setDefaultForRsProfiles(new ArrayList<>());
+                    }
+                    profile.getDefaultForRsProfiles().add(rsProfileKey);
+                    switchProfile = !profile.isActive();
+                    lock.dirty();
+                }
+
+                reload(lock.getProfiles());
+            }
+
+            if (switchProfile) {
+                switchToProfile(id);
+            }
+        });
+    }
+
+    private void exportProfile(ConfigProfile profile, File file) {
+        log.info("Exporting profile {} to {}", profile.getName(), file);
+
+        executor.execute(() ->
+        {
+            // save config to disk so the export copies the full config
+            configManager.sendConfig();
+
+            File source = ProfileManager.profileConfigFile(profile);
+            if (!source.exists()) {
+                SwingUtilities.invokeLater(() -> JOptionPane.showMessageDialog(null, "Profile '" + profile.getName() + "' can not be exported because it has no settings."));
+                return;
+            }
+
+            try {
+                Files.copy(
+                        source.toPath(),
+                        file.toPath(),
+                        StandardCopyOption.REPLACE_EXISTING
+                );
+            } catch (IOException e) {
+                log.error("error performing profile export", e);
+            }
+        });
+    }
+
+    private class ProfileCard extends JPanel {
+        private static final int CARD_WIDTH = 227;
+        private static final int LEFT_BORDER_WIDTH = 4;
+        private static final int LEFT_GAP = 4;
+
+        private final ConfigProfile profile;
+        private final JButton delete;
+        private final JTextField name;
         private final JTextField password;
-		private final JButton activate;
+        private final JTextField bankPin;
+        private final JCheckBox member;
+
+        private final JButton activate;
         private final JPanel expand;
-		private final JPanel buttons;
-		private final JToggleButton rename;
+        private final JPanel buttons;
+        private final JToggleButton rename;
 
         private boolean expanded;
         private boolean active;
 
-		private ProfileCard(ConfigProfile profile, boolean isActive, boolean rsProfileDefault, boolean limited, ProfileCard prev)
-		{
-			this.profile = profile;
+        private ProfileCard(ConfigProfile profile, boolean isActive, boolean rsProfileDefault, boolean limited, ProfileCard prev) {
+            this.profile = profile;
 
             setBackground(ColorScheme.DARKER_GRAY_COLOR);
 
@@ -385,7 +490,11 @@ class ProfilePanel extends PluginPanel {
                 }
             });
             password = new JPasswordField();
-            password.setText(profile.getPassword());
+            if (profile.getPassword() == null || profile.getPassword().isEmpty()) {
+                password.setText("**password**");
+            } else {
+                password.setText(profile.getPassword());
+            }
             password.setEditable(false);
             password.setEnabled(false);
             password.setOpaque(false);
@@ -399,6 +508,33 @@ class ProfilePanel extends PluginPanel {
                     }
                 }
             });
+            bankPin = new JTextField();
+            if (profile.getBankPin() == null || profile.getBankPin().isEmpty()) {
+                bankPin.setText("**bankpin**");
+            } else {
+                bankPin.setText(profile.getBankPin());
+            }
+            bankPin.setEditable(false);
+            bankPin.setEnabled(false);
+            bankPin.setOpaque(false);
+            bankPin.setBorder(null);
+            bankPin.addActionListener(ev -> stopRenamingBankPin(true));
+            bankPin.addKeyListener(new KeyAdapter() {
+                @Override
+                public void keyPressed(KeyEvent e) {
+                    if (e.getKeyCode() == KeyEvent.VK_ESCAPE) {
+                        stopRenamingBankPin(true);
+                    }
+                }
+            });
+
+            member = new JCheckBox("Is Member");
+            member.setSelected(profile.isMember());
+            member.addActionListener(e -> {
+                configManager.setMember(profile, member.isSelected());
+            });
+
+
             ((AbstractDocument) name.getDocument()).setDocumentFilter(new DocumentFilter() {
                 @Override
                 public void insertString(FilterBypass fb, int offset, String string, AttributeSet attr) throws BadLocationException {
@@ -410,168 +546,149 @@ class ProfilePanel extends PluginPanel {
                     super.replace(fb, offset, length, filter(text), attrs);
                 }
 
-				private String filter(String in)
-				{
-					// characters commonly forbidden in file names
-					return CharMatcher.noneOf("/\\<>:\"|?*\r\n\0")
-						.retainFrom(in);
-				}
-			});
+                private String filter(String in) {
+                    // characters commonly forbidden in file names
+                    return CharMatcher.noneOf("/\\<>:\"|?*\r\n\0")
+                            .retainFrom(in);
+                }
+            });
 
             activate = new JButton(ARROW_RIGHT_ICON);
             activate.setDisabledIcon(ARROW_RIGHT_ICON);
             activate.addActionListener(ev -> switchToProfile(profile.getId()));
             SwingUtil.removeButtonDecorations(activate);
 
-			{
+            {
                 expand = new JPanel();
                 expand.setOpaque(false);
                 expand.setLayout(new BorderLayout());
 
-				buttons = new JPanel();
-				buttons.setOpaque(false);
-				buttons.setLayout(new GridLayout(1, 0, 0, 0));
+                buttons = new JPanel();
+                buttons.setOpaque(false);
+                buttons.setLayout(new GridLayout(1, 0, 0, 0));
                 expand.add(buttons, BorderLayout.WEST);
 
-				rename = new JToggleButton(RENAME_ICON);
-				rename.setSelectedIcon(RENAME_ACTIVE_ICON);
-				rename.setToolTipText("Rename profile");
-				SwingUtil.removeButtonDecorations(rename);
-				rename.addActionListener(ev ->
-				{
-					if (rename.isSelected())
-					{
-						startRenaming();
-					}
-					else
-					{
-						stopRenaming(true);
-					}
-				});
-				buttons.add(rename);
+                rename = new JToggleButton(RENAME_ICON);
+                rename.setSelectedIcon(RENAME_ACTIVE_ICON);
+                rename.setToolTipText("Rename profile");
+                SwingUtil.removeButtonDecorations(rename);
+                rename.addActionListener(ev ->
+                {
+                    if (rename.isSelected()) {
+                        startRenaming();
+                    } else {
+                        stopRenaming(true);
+                    }
+                });
+                buttons.add(rename);
 
-				JButton clone = new JButton(CLONE_ICON);
-				clone.setToolTipText("Duplicate profile");
-				SwingUtil.removeButtonDecorations(clone);
-				clone.addActionListener(ev -> cloneProfile(profile));
-				clone.setEnabled(!limited);
-				buttons.add(clone);
+                JButton clone = new JButton(CLONE_ICON);
+                clone.setToolTipText("Duplicate profile");
+                SwingUtil.removeButtonDecorations(clone);
+                clone.addActionListener(ev -> cloneProfile(profile));
+                clone.setEnabled(!limited);
+                buttons.add(clone);
 
-				JButton export = new JButton(EXPORT_ICON);
-				export.setToolTipText("Export profile");
-				SwingUtil.removeButtonDecorations(export);
-				export.addActionListener(ev ->
-				{
-					JFileChooser fileChooser = new JFileChooser();
-					fileChooser.setDialogTitle("Profile export");
-					fileChooser.addChoosableFileFilter(new FileNameExtensionFilter("RuneLite properties", "properties"));
-					fileChooser.setAcceptAllFileFilterUsed(false);
-					fileChooser.setCurrentDirectory(lastFileChooserDirectory);
-					fileChooser.setSelectedFile(new File(fileChooser.getCurrentDirectory(), profile.getName() + ".properties"));
-					int selection = fileChooser.showSaveDialog(this);
-					if (selection == JFileChooser.APPROVE_OPTION)
-					{
-						File file = fileChooser.getSelectedFile();
-						lastFileChooserDirectory = file.getParentFile();
-						// add properties file extension
-						if (!file.getName().endsWith(".properties"))
-						{
-							file = new File(file.getParentFile(), file.getName() + ".properties");
-						}
-						exportProfile(profile, file);
-					}
-				});
-				buttons.add(export);
+                JButton export = new JButton(EXPORT_ICON);
+                export.setToolTipText("Export profile");
+                SwingUtil.removeButtonDecorations(export);
+                export.addActionListener(ev ->
+                {
+                    JFileChooser fileChooser = new JFileChooser();
+                    fileChooser.setDialogTitle("Profile export");
+                    fileChooser.addChoosableFileFilter(new FileNameExtensionFilter("RuneLite properties", "properties"));
+                    fileChooser.setAcceptAllFileFilterUsed(false);
+                    fileChooser.setCurrentDirectory(lastFileChooserDirectory);
+                    fileChooser.setSelectedFile(new File(fileChooser.getCurrentDirectory(), profile.getName() + ".properties"));
+                    int selection = fileChooser.showSaveDialog(this);
+                    if (selection == JFileChooser.APPROVE_OPTION) {
+                        File file = fileChooser.getSelectedFile();
+                        lastFileChooserDirectory = file.getParentFile();
+                        // add properties file extension
+                        if (!file.getName().endsWith(".properties")) {
+                            file = new File(file.getParentFile(), file.getName() + ".properties");
+                        }
+                        exportProfile(profile, file);
+                    }
+                });
+                buttons.add(export);
 
-				if (configManager.getRSProfileKey() != null)
-				{
-					JToggleButton defaultForRsProfile = new JToggleButton(LINK_ICON);
-					SwingUtil.removeButtonDecorations(defaultForRsProfile);
-					defaultForRsProfile.setSelectedIcon(LINK_ACTIVE_ICON);
-					defaultForRsProfile.setSelected(rsProfileDefault);
+                if (configManager.getRSProfileKey() != null) {
+                    JToggleButton defaultForRsProfile = new JToggleButton(LINK_ICON);
+                    SwingUtil.removeButtonDecorations(defaultForRsProfile);
+                    defaultForRsProfile.setSelectedIcon(LINK_ACTIVE_ICON);
+                    defaultForRsProfile.setSelected(rsProfileDefault);
 
-					final List<String> defaultForRsProfiles = profile.getDefaultForRsProfiles();
-					final StringBuilder tooltip = new StringBuilder("<html>");
-					if (defaultForRsProfiles == null || defaultForRsProfiles.isEmpty())
-					{
-						tooltip.append("Set profile as default for the current RuneScape account");
-					}
-					else
-					{
-						tooltip.append("This profile is the default for the following RuneScape accounts:");
-						for (final String rsProfileKey : profile.getDefaultForRsProfiles())
-						{
-							final String ign = configManager.getConfiguration(ConfigManager.RSPROFILE_GROUP, rsProfileKey, ConfigManager.RSPROFILE_DISPLAY_NAME);
-							if (Strings.isNullOrEmpty(ign))
-							{
-								continue;
-							}
+                    final List<String> defaultForRsProfiles = profile.getDefaultForRsProfiles();
+                    final StringBuilder tooltip = new StringBuilder("<html>");
+                    if (defaultForRsProfiles == null || defaultForRsProfiles.isEmpty()) {
+                        tooltip.append("Set profile as default for the current RuneScape account");
+                    } else {
+                        tooltip.append("This profile is the default for the following RuneScape accounts:");
+                        for (final String rsProfileKey : profile.getDefaultForRsProfiles()) {
+                            final String ign = configManager.getConfiguration(ConfigManager.RSPROFILE_GROUP, rsProfileKey, ConfigManager.RSPROFILE_DISPLAY_NAME);
+                            if (Strings.isNullOrEmpty(ign)) {
+                                continue;
+                            }
 
-							final RuneScapeProfileType worldType = configManager.getConfiguration(ConfigManager.RSPROFILE_GROUP, rsProfileKey, ConfigManager.RSPROFILE_TYPE, RuneScapeProfileType.class);
+                            final RuneScapeProfileType worldType = configManager.getConfiguration(ConfigManager.RSPROFILE_GROUP, rsProfileKey, ConfigManager.RSPROFILE_TYPE, RuneScapeProfileType.class);
 
-							tooltip.append("<br>");
-							tooltip.append(ign);
-							if (worldType != RuneScapeProfileType.STANDARD)
-							{
-								tooltip
-									.append(" (")
-									.append(Text.titleCase(worldType))
-									.append(')');
-							}
-						}
-					}
-					tooltip.append("</html>");
-					defaultForRsProfile.setToolTipText(tooltip.toString());
+                            tooltip.append("<br>");
+                            tooltip.append(ign);
+                            if (worldType != RuneScapeProfileType.STANDARD) {
+                                tooltip
+                                        .append(" (")
+                                        .append(Text.titleCase(worldType))
+                                        .append(')');
+                            }
+                        }
+                    }
+                    tooltip.append("</html>");
+                    defaultForRsProfile.setToolTipText(tooltip.toString());
 
-					defaultForRsProfile.addActionListener(ev ->
-					{
-						if (rsProfileDefault)
-						{
-							unsetRsProfileDefaultProfile();
-						}
-						else
-						{
-							setRsProfileDefaultProfile(profile.getId());
-						}
-					});
-					buttons.add(defaultForRsProfile);
-				}
+                    defaultForRsProfile.addActionListener(ev ->
+                    {
+                        if (rsProfileDefault) {
+                            unsetRsProfileDefaultProfile();
+                        } else {
+                            setRsProfileDefaultProfile(profile.getId());
+                        }
+                    });
+                    buttons.add(defaultForRsProfile);
+                }
 
-				if (sessionManager.getAccountSession() != null)
-				{
-					JToggleButton sync = new JToggleButton(SYNC_ICON);
-					SwingUtil.removeButtonDecorations(sync);
-					sync.setSelectedIcon(SYNC_ACTIVE_ICON);
-					sync.setToolTipText(profile.isSync() ? "Disable cloud sync" : "Enable cloud sync");
-					sync.setSelected(profile.isSync());
-					sync.addActionListener(ev -> toggleSync(ev, profile, sync.isSelected()));
-					buttons.add(sync);
-				}
+                if (sessionManager.getAccountSession() != null) {
+                    JToggleButton sync = new JToggleButton(SYNC_ICON);
+                    SwingUtil.removeButtonDecorations(sync);
+                    sync.setSelectedIcon(SYNC_ACTIVE_ICON);
+                    sync.setToolTipText(profile.isSync() ? "Disable cloud sync" : "Enable cloud sync");
+                    sync.setSelected(profile.isSync());
+                    sync.addActionListener(ev -> toggleSync(ev, profile, sync.isSelected()));
+                    buttons.add(sync);
+                }
 
-				delete = new JButton(DELETE_ICON);
-				delete.setToolTipText("Delete profile");
-				SwingUtil.removeButtonDecorations(delete);
-				delete.addActionListener(ev ->
-				{
-					int confirm = JOptionPane.showConfirmDialog(ProfileCard.this,
-						"Are you sure you want to delete this profile?",
-						"Warning", JOptionPane.OK_CANCEL_OPTION);
-					if (confirm == 0)
-					{
-						deleteProfile(profile);
-					}
-				});
-				buttons.add(delete);
+                delete = new JButton(DELETE_ICON);
+                delete.setToolTipText("Delete profile");
+                SwingUtil.removeButtonDecorations(delete);
+                delete.addActionListener(ev ->
+                {
+                    int confirm = JOptionPane.showConfirmDialog(ProfileCard.this,
+                            "Are you sure you want to delete this profile?",
+                            "Warning", JOptionPane.OK_CANCEL_OPTION);
+                    if (confirm == 0) {
+                        deleteProfile(profile);
+                    }
+                });
+                buttons.add(delete);
 
-				// Ensure buttons do not expand beyond the intended card width; this would cause the activate button to
-				// disappear off the right edge of the card.
-				final int maxButtonsWidth = CARD_WIDTH - LEFT_BORDER_WIDTH - LEFT_GAP - activate.getPreferredSize().width;
-				if (buttons.getPreferredSize().width > maxButtonsWidth)
-				{
-					buttons.setMinimumSize(new Dimension(maxButtonsWidth, buttons.getMinimumSize().height));
-					buttons.setPreferredSize(new Dimension(maxButtonsWidth, buttons.getPreferredSize().height));
-				}
-			}
+                // Ensure buttons do not expand beyond the intended card width; this would cause the activate button to
+                // disappear off the right edge of the card.
+                final int maxButtonsWidth = CARD_WIDTH - LEFT_BORDER_WIDTH - LEFT_GAP - activate.getPreferredSize().width;
+                if (buttons.getPreferredSize().width > maxButtonsWidth) {
+                    buttons.setMinimumSize(new Dimension(maxButtonsWidth, buttons.getMinimumSize().height));
+                    buttons.setPreferredSize(new Dimension(maxButtonsWidth, buttons.getPreferredSize().height));
+                }
+            }
 
             {
                 GroupLayout layout = new GroupLayout(this);
@@ -581,6 +698,8 @@ class ProfilePanel extends PluginPanel {
                         .addGroup(layout.createSequentialGroup()
                                 .addComponent(name, 24, 24, 24)
                                 .addComponent(password, 24, 24, 24)
+                                .addComponent(bankPin, 24, 24, 24)
+                                .addComponent(member, 24, 24, 24)
                                 .addComponent(expand))
                         .addComponent(activate, GroupLayout.DEFAULT_SIZE, GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE));
 
@@ -589,6 +708,8 @@ class ProfilePanel extends PluginPanel {
                         .addGroup(layout.createParallelGroup()
                                 .addComponent(name, GroupLayout.DEFAULT_SIZE, 0x7000, 0x7000)
                                 .addComponent(password, GroupLayout.DEFAULT_SIZE, 0x7000, 0x7000)
+                                .addComponent(bankPin, GroupLayout.DEFAULT_SIZE, 0x7000, 0x7000)
+                                .addComponent(member, GroupLayout.DEFAULT_SIZE, 0x7000, 0x7000)
                                 .addComponent(expand))
                         .addComponent(activate));
             }
@@ -604,7 +725,7 @@ class ProfilePanel extends PluginPanel {
                                 try {
                                     ExecutorService executor = Executors.newFixedThreadPool(1);
                                     executor.submit(() -> {
-                                        new Login(profile.getName(), profile.getPassword());
+                                        new Login();
                                     });
                                 } catch (Exception e) {
                                 }
@@ -646,6 +767,8 @@ class ProfilePanel extends PluginPanel {
             name.addMouseMotionListener(expandListener);
             password.addMouseListener(expandListener);
             password.addMouseMotionListener(expandListener);
+            bankPin.addMouseListener(expandListener);
+            bankPin.addMouseMotionListener(expandListener);
             activate.addMouseListener(expandListener);
             activate.addMouseMotionListener(expandListener);
 
@@ -653,27 +776,24 @@ class ProfilePanel extends PluginPanel {
             setExpanded(prev != null && prev.expanded);
         }
 
-		void setActive(boolean active)
-		{
-			this.active = active;
-			setBorder(new MatteBorder(0, LEFT_BORDER_WIDTH, 0, 0, active
-				? ColorScheme.BRAND_ORANGE
-				: ColorScheme.DARKER_GRAY_COLOR));
-			delete.setEnabled(!active);
-			activate.setEnabled(expanded && !active);
-		}
+        void setActive(boolean active) {
+            this.active = active;
+            setBorder(new MatteBorder(0, LEFT_BORDER_WIDTH, 0, 0, active
+                    ? ColorScheme.BRAND_ORANGE
+                    : ColorScheme.DARKER_GRAY_COLOR));
+            delete.setEnabled(!active);
+            activate.setEnabled(expanded && !active);
+        }
 
-		void setExpanded(boolean expanded)
-		{
-			this.expanded = expanded;
+        void setExpanded(boolean expanded) {
+            this.expanded = expanded;
             expand.setVisible(expanded);
-			activate.setEnabled(expanded && !active);
-			if (rename.isSelected())
-			{
-				stopRenaming(true);
-			}
-			revalidate();
-		}
+            activate.setEnabled(expanded && !active);
+            if (rename.isSelected()) {
+                stopRenaming(true);
+            }
+            revalidate();
+        }
 
         private void startRenaming() {
             name.setEnabled(true);
@@ -682,6 +802,7 @@ class ProfilePanel extends PluginPanel {
             name.requestFocusInWindow();
             name.selectAll();
             startRenamingPassword();
+            startRenamingBankPin();
         }
 
         private void stopRenaming(boolean save) {
@@ -697,16 +818,24 @@ class ProfilePanel extends PluginPanel {
                 name.setText(profile.getName());
             }
             stopRenamingPassword(save);
+            stopRenamingBankPin(save);
         }
 
-		private void startRenamingPassword()
-		{
-			password.setEnabled(true);
-			password.setEditable(true);
-			password.setOpaque(true);
-			password.requestFocusInWindow();
-			password.selectAll();
-		}
+        private void startRenamingPassword() {
+            password.setEnabled(true);
+            password.setEditable(true);
+            password.setOpaque(true);
+            password.requestFocusInWindow();
+            password.selectAll();
+        }
+
+        private void startRenamingBankPin() {
+            bankPin.setEnabled(true);
+            bankPin.setEditable(true);
+            bankPin.setOpaque(true);
+            bankPin.requestFocusInWindow();
+            bankPin.selectAll();
+        }
 
         private void stopRenamingPassword(boolean save) {
             password.setEditable(false);
@@ -714,6 +843,10 @@ class ProfilePanel extends PluginPanel {
             password.setOpaque(false);
 
             rename.setSelected(false);
+
+            if (password.getText().isEmpty()) {
+                return;
+            }
 
             try {
                 configManager.setPassword(profile, net.runelite.client.plugins.microbot.util.security.Encryption.encrypt(password.getText()));
@@ -727,169 +860,30 @@ class ProfilePanel extends PluginPanel {
                 password.setText(profile.getPassword());
             }
         }
-    }
 
-    private void createProfile() {
-        try (ProfileManager.Lock lock = profileManager.lock()) {
-            String name = "New Profile";
-            int number = 1;
-            while (lock.findProfile(name) != null) {
-                name = "New Profile (" + (number++) + ")";
-            }
+        private void stopRenamingBankPin(boolean save) {
+            bankPin.setEditable(false);
+            bankPin.setEnabled(false);
+            bankPin.setOpaque(false);
 
-            log.info("Creating new profile: {}", name);
-            lock.createProfile(name);
+            rename.setSelected(false);
 
-            reload(lock.getProfiles());
-        }
-    }
-
-    private void deleteProfile(ConfigProfile profile) {
-        log.info("Deleting profile {}", profile.getName());
-
-        // disabling sync causes the profile to be deleted
-        configManager.toggleSync(profile, false);
-
-        try (ProfileManager.Lock lock = profileManager.lock()) {
-            lock.removeProfile(profile.getId());
-
-            reload(lock.getProfiles());
-        }
-    }
-
-    private void renameProfile(long id, String name) {
-        try (ProfileManager.Lock lock = profileManager.lock()) {
-            ConfigProfile profile = lock.findProfile(id);
-            if (profile == null) {
-                log.warn("rename for nonexistent profile {}", id);
-                // maybe profile was removed by another client, reload the panel
-                reload(lock.getProfiles());
-                return;
-            }
-
-			log.info("Renaming profile {} ({}) to {}", profile, profile.getId(), name);
-
-            lock.renameProfile(profile, name);
-            configManager.renameProfile(profile, name);
-
-            reload(lock.getProfiles());
-        }
-    }
-
-    private void switchToProfile(long id) {
-        ConfigProfile profile;
-        try (ProfileManager.Lock lock = profileManager.lock()) {
-            profile = lock.findProfile(id);
-            if (profile == null) {
-                log.warn("change to nonexistent profile {}", id);
-                // maybe profile was removed by another client, reload the panel
-                reload(lock.getProfiles());
-                return;
-            }
-
-            log.debug("Switching profile to {}", profile.getName());
-
-            // change active profile
-            lock.getProfiles().forEach(p -> p.setActive(false));
-            profile.setActive(true);
-            lock.dirty();
-        }
-
-        executor.submit(() -> configManager.switchProfile(profile));
-    }
-
-	private void unsetRsProfileDefaultProfile()
-	{
-		setRsProfileDefaultProfile(-1);
-	}
-
-	private void setRsProfileDefaultProfile(long id)
-	{
-		executor.submit(() ->
-		{
-			boolean switchProfile = false;
-			try (ProfileManager.Lock lock = profileManager.lock())
-			{
-				final String rsProfileKey = configManager.getRSProfileKey();
-				if (rsProfileKey == null)
-				{
-					return;
-				}
-
-				for (final ConfigProfile profile : lock.getProfiles())
-				{
-					final List<String> defaultForRsProfiles = profile.getDefaultForRsProfiles();
-					if (defaultForRsProfiles == null)
-					{
-						continue;
-					}
-					if (profile.getDefaultForRsProfiles().remove(rsProfileKey))
-					{
-						lock.dirty();
-					}
-				}
-
-				if (id == -1)
-				{
-					log.debug("Unsetting default profile for rsProfile {}", rsProfileKey);
-				}
-				else
-				{
-					final ConfigProfile profile = lock.findProfile(id);
-					if (profile == null)
-					{
-						log.warn("setting nonexistent profile {} as default for rsprofile", id);
-						// maybe profile was removed by another client, reload the panel
-						reload(lock.getProfiles());
-						return;
-					}
-
-					log.debug("Setting profile {} as default for rsProfile {}", profile.getName(), rsProfileKey);
-
-					if (profile.getDefaultForRsProfiles() == null)
-					{
-						profile.setDefaultForRsProfiles(new ArrayList<>());
-					}
-					profile.getDefaultForRsProfiles().add(rsProfileKey);
-					switchProfile = !profile.isActive();
-					lock.dirty();
-				}
-
-				reload(lock.getProfiles());
-			}
-
-			if (switchProfile)
-			{
-				switchToProfile(id);
-			}
-		});
-	}
-
-	private void exportProfile(ConfigProfile profile, File file)
-	{
-		log.info("Exporting profile {} to {}", profile.getName(), file);
-
-        executor.execute(() ->
-        {
-            // save config to disk so the export copies the full config
-            configManager.sendConfig();
-
-            File source = ProfileManager.profileConfigFile(profile);
-            if (!source.exists()) {
-                SwingUtilities.invokeLater(() -> JOptionPane.showMessageDialog(null, "Profile '" + profile.getName() + "' can not be exported because it has no settings."));
+            if (bankPin.getText().isEmpty()) {
                 return;
             }
 
             try {
-                Files.copy(
-                        source.toPath(),
-                        file.toPath(),
-                        StandardCopyOption.REPLACE_EXISTING
-                );
-            } catch (IOException e) {
-                log.error("error performing profile export", e);
+                configManager.setBankPin(profile, net.runelite.client.plugins.microbot.util.security.Encryption.encrypt(bankPin.getText()));
+            } catch (Exception e) {
+                throw new RuntimeException(e);
             }
-        });
+
+            if (save) {
+                renameProfile(profile.getId(), name.getText().trim());
+            } else {
+                bankPin.setText(profile.getBankPin());
+            }
+        }
     }
 
     private void importProfile(File file) {

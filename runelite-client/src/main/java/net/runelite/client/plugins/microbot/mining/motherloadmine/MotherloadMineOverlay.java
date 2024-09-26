@@ -1,9 +1,6 @@
 package net.runelite.client.plugins.microbot.mining.motherloadmine;
 
-import net.runelite.api.Skill;
-import net.runelite.client.plugins.microbot.Microbot;
-import net.runelite.client.plugins.microbot.mining.MiningScript;
-import net.runelite.client.plugins.natepainthelper.PaintFormat;
+import net.runelite.client.plugins.microbot.util.antiban.Rs2Antiban;
 import net.runelite.client.ui.overlay.OverlayPanel;
 import net.runelite.client.ui.overlay.OverlayPosition;
 import net.runelite.client.ui.overlay.components.LineComponent;
@@ -13,7 +10,6 @@ import javax.inject.Inject;
 import java.awt.*;
 
 import static net.runelite.client.plugins.microbot.mining.motherloadmine.MotherloadMineScript.status;
-import static net.runelite.client.plugins.natepainthelper.Info.*;
 
 
 public class MotherloadMineOverlay extends OverlayPanel {
@@ -22,22 +18,40 @@ public class MotherloadMineOverlay extends OverlayPanel {
     {
         super(plugin);
         setPosition(OverlayPosition.TOP_LEFT);
+        setSnappable(true);
     }
     @Override
     public Dimension render(Graphics2D graphics) {
         try {
-            panelComponent.setPreferredLocation(new Point(80, 8));
-            panelComponent.setPreferredSize(new Dimension(275, 700));
+
+            panelComponent.setPreferredSize(new Dimension(275, 900));
             panelComponent.getChildren().add(TitleComponent.builder()
-                    .text("Pay-dirt mining v" + MiningScript.version)
-                    .color(Color.GREEN)
+                    .text("\uD83E\uDD86 Motherlode Mine \uD83E\uDD86")
+                    .color(Color.ORANGE)
                     .build());
+
+
+            Rs2Antiban.renderAntibanOverlayComponents(panelComponent);
+            addEmptyLine();
+
+
+            panelComponent.getChildren().add(LineComponent.builder()
+                    .left("Mining Location: " + MotherloadMineScript.miningSpot.name())
+                    .build());
+
+            addEmptyLine();
+
             panelComponent.getChildren().add(LineComponent.builder()
                     .left(status.toString())
+                    .right("Version: " + MotherloadMineScript.version)
                     .build());
         } catch(Exception ex) {
             System.out.println(ex.getMessage());
         }
         return super.render(graphics);
+    }
+
+    private void addEmptyLine() {
+        panelComponent.getChildren().add(LineComponent.builder().build());
     }
 }

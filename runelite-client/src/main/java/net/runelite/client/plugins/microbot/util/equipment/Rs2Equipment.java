@@ -19,6 +19,10 @@ public class Rs2Equipment {
     }
 
     public static List<Rs2Item> equipmentItems = new ArrayList<>();
+    
+    public static List<Rs2Item> items() {
+        return equipmentItems;
+    }
 
     public static void storeEquipmentItemsInMemory(ItemContainerChanged e) {
         if (e.getContainerId() == InventoryID.EQUIPMENT.getId() && e.getItemContainer() != null) {
@@ -26,11 +30,11 @@ public class Rs2Equipment {
             for (int i = 0; i < e.getItemContainer().getItems().length; i++) {
                 Item item = equipment().getItems()[i];
                 if (item.getId() == -1) continue;
-                ItemComposition itemComposition = Microbot.getClientThread().runOnClientThread(() -> Microbot.getClient().getItemDefinition(item.getId()));
                 int finalI = i;
                 Optional<EquipmentInventorySlot> equipmentSlot = Arrays.stream(EquipmentInventorySlot.values()).filter(x -> x.getSlotIdx() == finalI).findFirst();
                 if (equipmentSlot.isEmpty()) continue;
                 int slot = equipmentSlot.get().getSlotIdx();
+                ItemComposition itemComposition = Microbot.getClientThread().runOnClientThread(() -> Microbot.getClient().getItemDefinition(item.getId()));
                 _equipmentItems.add(new Rs2Item(item, itemComposition, slot));
             }
             equipmentItems = _equipmentItems;
@@ -157,7 +161,6 @@ public class Rs2Equipment {
         }
     }
 
-
     public static boolean hasGuthanWeaponEquiped() {
         return isEquipped("guthan's warspear", EquipmentInventorySlot.WEAPON);
     }
@@ -203,6 +206,20 @@ public class Rs2Equipment {
         return false;
     }
 
+    public static boolean isWearing(List<String> names, boolean exact, List<EquipmentInventorySlot> ignoreSlots) {
+        for (String name : names) {
+            for (EquipmentInventorySlot slot : EquipmentInventorySlot.values()) {
+                if (ignoreSlots.stream().anyMatch(x -> x.getSlotIdx() == slot.getSlotIdx()))
+                    continue;
+                if (!isEquipped(name, slot, exact)) {
+                    return false;
+                }
+            }
+        }
+
+        return true;
+    }
+
     public static boolean interact(int id, String action) {
         Rs2Item item = get(id);
         if (item != null) {
@@ -234,6 +251,10 @@ public class Rs2Equipment {
             return true;
         }
         return false;
+    }
+
+    public static boolean isWearingShield() {
+        return equipmentItems.stream().anyMatch(x -> x.getSlot() == EquipmentInventorySlot.SHIELD.getSlotIdx());
     }
 
     private static void invokeMenu(Rs2Item rs2Item, String action) {

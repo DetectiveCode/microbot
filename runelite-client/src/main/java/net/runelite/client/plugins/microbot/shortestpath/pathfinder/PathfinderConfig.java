@@ -4,16 +4,13 @@ import lombok.Getter;
 import net.runelite.api.*;
 import net.runelite.api.coords.WorldArea;
 import net.runelite.api.coords.WorldPoint;
-import net.runelite.client.plugins.microbot.Microbot;
-import net.runelite.client.plugins.microbot.shortestpath.PrimitiveIntHashMap;
-import net.runelite.client.plugins.microbot.shortestpath.ShortestPathConfig;
-import net.runelite.client.plugins.microbot.shortestpath.Transport;
-import net.runelite.client.plugins.microbot.shortestpath.WorldPointUtil;
+import net.runelite.client.plugins.microbot.shortestpath.*;
+import net.runelite.client.plugins.microbot.util.equipment.Rs2Equipment;
+import net.runelite.client.plugins.microbot.util.inventory.Rs2Inventory;
 
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 public class PathfinderConfig {
     private static final WorldArea WILDERNESS_ABOVE_GROUND = new WorldArea(2944, 3523, 448, 448, 0);
@@ -24,6 +21,11 @@ public class PathfinderConfig {
     private final Map<WorldPoint, List<Transport>> allTransports;
     @Getter
     private Map<WorldPoint, List<Transport>> transports;
+
+    private final List<Restriction> resourceRestrictions;
+    private List<Restriction> customRestrictions;
+    @Getter
+    private Set<Integer> restrictedPointsPacked;
 
     // Copy of transports with packed positions for the hotpath; lists are not copied and are the same reference in both maps
     @Getter
@@ -46,7 +48,8 @@ public class PathfinderConfig {
         useGnomeGliders,
         useSpiritTrees,
         useTeleportationLevers,
-        useTeleportationPortals;
+        useTeleportationPortals,
+        useNpcs;
     private int agilityLevel;
     private int rangedLevel;
     private int strengthLevel;
@@ -54,12 +57,15 @@ public class PathfinderConfig {
     private int woodcuttingLevel;
     private Map<Quest, QuestState> questStates = new HashMap<>();
 
-    public PathfinderConfig(SplitFlagMap mapData, Map<WorldPoint, List<Transport>> transports, Client client,
+    public PathfinderConfig(SplitFlagMap mapData, Map<WorldPoint, List<Transport>> transports, List<Restriction> restrictions, Client client,
                             ShortestPathConfig config) {
         this.mapData = mapData;
         this.map = ThreadLocal.withInitial(() -> new CollisionMap(this.mapData));
         this.allTransports = transports;
         this.transports = new HashMap<>(allTransports.size());
+        this.resourceRestrictions = restrictions;
+        this.customRestrictions = new ArrayList<>();
+        this.restrictedPointsPacked = new HashSet<>();
         this.transportsPacked = new PrimitiveIntHashMap<>(allTransports.size());
         this.client = client;
         this.config = config;
@@ -83,6 +89,7 @@ public class PathfinderConfig {
         useGnomeGliders = config.useGnomeGliders();
         useTeleportationLevers = config.useTeleportationLevers();
         useTeleportationPortals = config.useTeleportationPortals();
+        useNpcs = config.useNpcs();
 
         if (GameState.LOGGED_IN.equals(client.getGameState())) {
             agilityLevel = client.getBoostedSkillLevel(Skill.AGILITY);
@@ -91,7 +98,9 @@ public class PathfinderConfig {
             prayerLevel = client.getBoostedSkillLevel(Skill.PRAYER);
             woodcuttingLevel = client.getBoostedSkillLevel(Skill.WOODCUTTING);
 
+            questStates.clear();
             refreshTransportData();
+            refreshRestrictionData();
         }
     }
 
@@ -100,7 +109,11 @@ public class PathfinderConfig {
             return; // Has to run on the client thread; data will be refreshed when path finding commences
         }
 
-        useFairyRings &= !QuestState.NOT_STARTED.equals(getQuestState(Quest.FAIRYTALE_II__CURE_A_QUEEN));
+        useFairyRings &= !QuestState.NOT_STARTED.equals(getQuestState(Quest.FAIRYTALE_II__CURE_A_QUEEN))
+                        && (Rs2Inventory.contains(ItemID.DRAMEN_STAFF, ItemID.LUNAR_STAFF)
+                            || Rs2Equipment.isWearing(ItemID.DRAMEN_STAFF)
+                            || Rs2Equipment.isWearing(ItemID.LUNAR_STAFF)
+                            || client.getVarbitValue(Varbits.DIARY_LUMBRIDGE_ELITE)  == 1);
         useGnomeGliders &= QuestState.FINISHED.equals(getQuestState(Quest.THE_GRAND_TREE));
         useSpiritTrees &= QuestState.FINISHED.equals(getQuestState(Quest.TREE_GNOME_VILLAGE));
 
@@ -110,9 +123,11 @@ public class PathfinderConfig {
             List<Transport> usableTransports = new ArrayList<>(entry.getValue().size());
             for (Transport transport : entry.getValue()) {
                 for (Quest quest : transport.getQuests()) {
-                    try {
-                        questStates.put(quest, getQuestState(quest));
-                    } catch (NullPointerException ignored) {
+                    if (!questStates.containsKey(quest)) {
+                        try {
+                            questStates.put(quest, getQuestState(quest));
+                        } catch (NullPointerException ignored) {
+                        }
                     }
                 }
 
@@ -124,6 +139,27 @@ public class PathfinderConfig {
             WorldPoint point = entry.getKey();
             transports.put(point, usableTransports);
             transportsPacked.put(WorldPointUtil.packWorldPoint(point), usableTransports);
+        }
+    }
+
+    private void refreshRestrictionData() {
+        if (!Thread.currentThread().equals(client.getClientThread())) {
+            return;
+        }
+
+        restrictedPointsPacked.clear();
+        for (var entry : Stream.concat(resourceRestrictions.stream(), customRestrictions.stream()).collect(Collectors.toList())){
+            for (Quest quest : entry.getQuests()) {
+                if (!questStates.containsKey(quest)){
+                    try {
+                        questStates.put(quest, getQuestState(quest));
+                    } catch (NullPointerException ignored) {
+                    }
+                }
+            }
+
+            if (entry.getQuests().isEmpty() || entry.getQuests().stream().anyMatch(x -> questStates.get(x) != QuestState.FINISHED))
+                restrictedPointsPacked.add(entry.getPackedWorldPoint());
         }
     }
 
@@ -172,6 +208,7 @@ public class PathfinderConfig {
         final boolean isTeleportationPortal = transport.isTeleportationPortal();
         final boolean isPrayerLocked = transportPrayerLevel > 1;
         final boolean isQuestLocked = transport.isQuestLocked();
+        final boolean isNpc = transport.isNpc();
 
         if (isAgilityShortcut) {
             if (!useAgilityShortcuts || agilityLevel < transportAgilityLevel) {
@@ -227,6 +264,17 @@ public class PathfinderConfig {
             return false;
         }
 
+        if (isNpc && !useNpcs){
+            return false;
+        }
+
+        if (transport.getItems().entrySet().stream().anyMatch(x -> !Rs2Inventory.hasItemAmount(x.getKey(), x.getValue())))
+            return false;
+
         return true;
+    }
+
+    public void setRestrictedTiles(Restriction... restrictions){
+        this.customRestrictions = List.of(restrictions);
     }
 }

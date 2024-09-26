@@ -18,19 +18,14 @@ public interface ThievingConfig extends Config {
             section = generalSection
     )
     default String GUIDE() {
-        return "Start near any of the npc\n" +
-                "Script default food is monkfish\n" +
-                "Script will walk to bank if out of food\n"+
-                "Make sure to start the script wearing dodgy necklace\n"+
-                "Script supports dodgy necklace\n"+
-                "Use Open CoinPouch Helper";
+        return "Start near any of the npc";
     }
     @ConfigSection(
             name = "general",
             description = "general",
             position = 0
     )
-    String generalSection = "general";
+    String generalSection = "General";
 
     @ConfigItem(
             keyName = "Npc",
@@ -43,6 +38,36 @@ public interface ThievingConfig extends Config {
     {
         return ThievingNpc.NONE;
     }
+
+    @ConfigSection(
+            name = "buffs",
+            description = "general",
+            position = 0
+    )
+    String buffsSection = "Buffs";
+
+    @ConfigItem(
+            keyName = "shadowVeil",
+            name = "Shadow veil",
+            description = "Choose whether to shadow veil",
+            position = 0,
+            section = buffsSection
+    )
+    default boolean shadowVeil() {
+        return false;
+    }
+
+    @ConfigItem(
+            keyName = "equipBook",
+            name = "Equip book of the dead",
+            description = "Whether or not to equip the book of the dead",
+            position = 0,
+            section = buffsSection
+    )
+    default boolean equipBook() {
+        return true;
+    }
+
 
     @ConfigSection(
             name = "Food",

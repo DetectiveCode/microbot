@@ -2,15 +2,23 @@ package net.runelite.client.plugins.microbot.shortestpath;
 
 import com.google.common.base.Strings;
 import lombok.Getter;
-import net.runelite.api.Quest;
-import net.runelite.api.QuestState;
-import net.runelite.api.Skill;
+import net.runelite.api.*;
 import net.runelite.api.coords.WorldPoint;
 import net.runelite.client.plugins.microbot.Microbot;
+import net.runelite.client.plugins.microbot.util.equipment.Rs2Equipment;
+import net.runelite.client.plugins.microbot.util.gameobject.Rs2GameObject;
+import net.runelite.client.plugins.microbot.util.inventory.Rs2Inventory;
+import net.runelite.client.plugins.microbot.util.inventory.Rs2Item;
+import net.runelite.client.plugins.microbot.util.keyboard.Rs2Keyboard;
+import net.runelite.client.plugins.microbot.util.npc.Rs2Npc;
+import net.runelite.client.plugins.microbot.util.player.Rs2Player;
+import net.runelite.client.plugins.microbot.util.widget.Rs2Widget;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.*;
+
+import static net.runelite.client.plugins.microbot.util.Global.sleep;
 
 /**
  * This class represents a travel point between two WorldPoints.
@@ -33,6 +41,9 @@ public class Transport {
      * The skill levels required to use this transport
      */
     private final int[] skillLevels = new int[Skill.values().length];
+
+    @Getter
+    private final HashMap<String, Integer> items = new HashMap<>();
 
     /**
      * The quests required to use this transport
@@ -109,6 +120,10 @@ public class Transport {
     /**
      * The additional travel time
      */
+    /** Whether the transport is a player-held item */
+    @Getter
+    private boolean isNpc;
+
     @Getter
     private int wait;
 
@@ -126,6 +141,9 @@ public class Transport {
     private int objectId;
     @Getter
     private boolean isMember;
+
+    @Getter
+    private String npcName;
 
     Transport(final WorldPoint origin, final WorldPoint destination) {
         this.origin = origin;
@@ -151,11 +169,12 @@ public class Transport {
 
         try {
             action = parts[2].split(DELIM)[0];
+            String npcAndObjectId = parts[2].substring(parts[2].indexOf(action) + action.length()).trim();
+            npcName = npcAndObjectId.replaceAll("\\d", "").trim();  // Remove the numbers to get the NPC name
             objectId = Integer.parseInt(parts[2].split(DELIM)[parts[2].split(DELIM).length - 1]);
         } catch(Exception ex) {
             System.out.println(ex.getMessage());
         }
-
 
         // Skill requirements
         if (parts.length >= 4 && !parts[3].isEmpty()) {
@@ -174,6 +193,30 @@ public class Transport {
                         break;
                     }
                 }
+            }
+        }
+
+        // Item requirements
+        if (parts.length >= 5 && !parts[4].isEmpty()) {
+            String[] itemRequirements = parts[4].split(";");
+
+            for (String requirement : itemRequirements) {
+                if (requirement.isBlank())
+                    continue;
+
+                int splitIndex = requirement.indexOf(DELIM);
+                int amount;
+                String item;
+
+                try {
+                    amount = Integer.parseInt(requirement.substring(0, splitIndex));
+                    item = requirement.substring(splitIndex + 1);
+                } catch (NumberFormatException e){
+                    amount = 1;
+                    item = requirement;
+                }
+
+                items.put(item, amount);
             }
         }
 
@@ -202,6 +245,7 @@ public class Transport {
         isSpiritTree = TransportType.SPIRIT_TREE.equals(transportType);
         isTeleportationLever = TransportType.TELEPORTATION_LEVER.equals(transportType);
         isTeleportationPortal = TransportType.TELEPORTATION_PORTAL.equals(transportType);
+        isNpc = TransportType.NPC.equals(transportType);
         isMember = TransportType.TELEPORTATION_LEVER.equals(transportType)
                 ||  TransportType.SPIRIT_TREE.equals(transportType)
                 || TransportType.GNOME_GLIDER.equals(transportType)
@@ -300,9 +344,11 @@ public class Transport {
         addTransports(transports, "spirit_trees.tsv", TransportType.SPIRIT_TREE);
         addTransports(transports, "levers.tsv", TransportType.TELEPORTATION_LEVER);
         addTransports(transports, "portals.tsv", TransportType.TELEPORTATION_PORTAL);
+        addTransports(transports, "npcs.tsv", TransportType.NPC);
 
         return transports;
     }
+
 
     private enum TransportType {
         TRANSPORT,
@@ -315,7 +361,8 @@ public class Transport {
         GNOME_GLIDER,
         SPIRIT_TREE,
         TELEPORTATION_LEVER,
-        TELEPORTATION_PORTAL
+        TELEPORTATION_PORTAL,
+        NPC,
     }
 
     private static boolean completedQuests(Transport transport) {
@@ -325,5 +372,245 @@ public class Transport {
             }
         }
         return true;
+    }
+
+    public boolean handleSpiritTree() {
+        int spiritTreeMenu = 12255232;
+
+        // Get Transport Information
+        String displayInfo = this.getDisplayInfo();
+        String objectName = this.getObjectName();
+        int objectId = this.getObjectId();
+        String action = this.getAction();
+        WorldPoint origin = this.getOrigin();
+        WorldPoint destination = this.getDestination();
+
+        System.out.println("Display info: " + displayInfo);
+        System.out.println("Object Name: " + objectName);
+        System.out.println("Object ID: " + objectId);
+        System.out.println("Action: " + action);
+        System.out.println("Origin: " + origin);
+        System.out.println("Destination: " + destination);
+
+        // Check if the widget is already visible
+        if (!Rs2Widget.isHidden(spiritTreeMenu)) {
+            System.out.println("Widget is already visible. Skipping interaction.");
+            char key = displayInfo.charAt(0);
+            System.out.println(key);
+            Rs2Keyboard.keyPress(key);
+            System.out.println("Pressing: " + key);
+            return true;
+        }
+
+        // Find the spirit tree object
+        TileObject spiritTree = Rs2GameObject.findObjectByImposter(objectId, "Travel");
+        if (spiritTree == null) {
+            System.out.println("Spirit tree not found.");
+            return false;
+        }
+
+        // Interact with the spirit tree
+        Rs2GameObject.interact(spiritTree);
+
+        // Wait for the widget to become visible
+        boolean widgetVisible = !Rs2Widget.isHidden(spiritTreeMenu);
+        if (!widgetVisible) {
+            System.out.println("Widget did not become visible within the timeout.");
+            return false;
+        }
+
+        System.out.println("Widget is now visible.");
+        char key = displayInfo.charAt(0);
+        Rs2Keyboard.keyPress(key);
+        System.out.println("Pressing: " + key);
+        return true;
+    }
+
+    public boolean handleGlider() {
+        int gliderMenu = 9043968;
+        int TA_QUIR_PRIW = 9043972;
+        int SINDARPOS = 9043975;
+        int LEMANTO_ANDRA = 9043978;
+        int KAR_HEWO = 9043981;
+        int GANDIUS = 9043984;
+        int OOKOOKOLLY_UNDRI = 9043993;
+
+        // Get Transport Information
+        String displayInfo = this.getDisplayInfo();
+        String objectName = this.getObjectName();
+        String npcName = this.getNpcName();
+        int objectId = this.getObjectId();
+        String action = this.getAction();
+        WorldPoint origin = this.getOrigin();
+        WorldPoint destination = this.getDestination();
+
+        System.out.println("Display info: " + displayInfo);
+        System.out.println("Object Name: " + objectName);
+        System.out.println("NPC Name: " + npcName);
+        System.out.println("Object ID: " + objectId);
+        System.out.println("Action: " + action);
+        System.out.println("Origin: " + origin);
+        System.out.println("Destination: " + destination);
+
+        // Check if the widget is already visible
+        if (!Rs2Widget.isHidden(gliderMenu)) {
+            System.out.println("Widget is already visible. Skipping interaction.");
+            return true;
+        }
+
+        // Find the glider NPC
+        NPC gnome = Rs2Npc.getNpc(npcName);  // Use the NPC name to find the NPC
+        if (gnome == null) {
+            System.out.println("Gnome not found.");
+            return false;
+        }
+
+        // Interact with the gnome glider NPC
+        Rs2Npc.interact(gnome, action);
+
+        sleep(1200,2400);
+
+        // Wait for the widget to become visible
+        boolean widgetVisible = !Rs2Widget.isHidden(gliderMenu);
+        if (!widgetVisible) {
+            System.out.println("Widget did not become visible within the timeout.");
+            return false;
+        }
+
+        System.out.println("Widget is now visible.");
+
+        switch(displayInfo) {
+            case "Kar-Hewo":
+                Rs2Widget.clickWidget(KAR_HEWO);
+            case "Gnome Stronghold":
+                Rs2Widget.clickWidget(TA_QUIR_PRIW);
+            case "Sindarpos":
+                Rs2Widget.clickWidget(SINDARPOS);
+            case "Lemanto Andra":
+                Rs2Widget.clickWidget(LEMANTO_ANDRA);
+            case "Gandius":
+                Rs2Widget.clickWidget(GANDIUS);
+            case "Ookookolly Undri":
+                Rs2Widget.clickWidget(OOKOOKOLLY_UNDRI);
+        }
+        return true;
+    }
+
+    // Constants for widget IDs
+    private static final int FAIRY_RING_MENU = 26083328;
+
+    private static final int SLOT_ONE = 26083331;
+    private static final int SLOT_TWO = 26083332;
+    private static final int SLOT_THREE = 26083333;
+    private static final int TELEPORT_BUTTON = 26083354;
+
+    private static final int SLOT_ONE_CW_ROTATION = 26083347;
+    private static final int SLOT_ONE_ACW_ROTATION = 26083348;
+    private static final int SLOT_TWO_CW_ROTATION = 26083349;
+    private static final int SLOT_TWO_ACW_ROTATION = 26083350;
+    private static final int SLOT_THREE_CW_ROTATION = 26083351;
+    private static final int SLOT_THREE_ACW_ROTATION = 26083352;
+    private static Rs2Item startingWeapon = null;
+    private static int startingWeaponId;
+
+    public boolean handleFairyRing() {
+        // Get Transport Information
+        String displayInfo = getDisplayInfo();
+        String objectName = getObjectName();
+        int objectId = getObjectId();
+        String action = getAction();
+        WorldPoint origin = getOrigin();
+        WorldPoint destination = getDestination();
+
+        if (startingWeapon == null) {
+
+
+        startingWeapon = Rs2Equipment.get(EquipmentInventorySlot.WEAPON);
+            System.out.println(startingWeapon);
+            startingWeaponId = startingWeapon.getId();
+        }
+
+        System.out.println("Display info: " + displayInfo);
+        System.out.println("Object Name: " + objectName);
+        System.out.println("Object ID: " + objectId);
+        System.out.println("Action: " + action);
+        System.out.println("Origin: " + origin);
+        System.out.println("Destination: " + destination);
+        System.out.println("Starting Weapon ID: " + startingWeaponId);
+
+        // Check if the widget is already visible
+        if (!Rs2Widget.isHidden(FAIRY_RING_MENU)) {
+            System.out.println("Widget is already visible. Skipping interaction.");
+            rotateSlotToDesiredRotation(SLOT_ONE, Rs2Widget.getWidget(SLOT_ONE).getRotationY(), getDesiredRotation(getDisplayInfo().charAt(0)), SLOT_ONE_ACW_ROTATION, SLOT_ONE_CW_ROTATION);
+            rotateSlotToDesiredRotation(SLOT_TWO, Rs2Widget.getWidget(SLOT_TWO).getRotationY(), getDesiredRotation(getDisplayInfo().charAt(1)), SLOT_TWO_ACW_ROTATION, SLOT_TWO_CW_ROTATION);
+            rotateSlotToDesiredRotation(SLOT_THREE, Rs2Widget.getWidget(SLOT_THREE).getRotationY(), getDesiredRotation(getDisplayInfo().charAt(2)), SLOT_THREE_ACW_ROTATION, SLOT_THREE_CW_ROTATION);
+            Rs2Widget.clickWidget(TELEPORT_BUTTON);
+            Rs2Player.waitForAnimation();
+            if (!Rs2Equipment.isWearing(startingWeaponId)) {
+                sleep(3000,3600); // Required due to long animation time
+                System.out.println("Equipping Starting Weapon: " + startingWeaponId);
+                Rs2Inventory.equip(startingWeaponId);
+            }
+            return true;
+        }
+
+        if (Rs2Equipment.isWearing("Dramen staff") || Rs2Equipment.isWearing("Lunar staff")) {
+            System.out.println("Interacting with the fairy ring directly.");
+            var fairyRing = Rs2GameObject.findObjectByLocation(origin);
+            Rs2GameObject.interact(fairyRing, "Configure");
+            Rs2Player.waitForWalking();
+        } else if (Rs2Inventory.contains("Dramen staff")) {
+            Rs2Inventory.equip("Dramen staff");
+            sleep(600);
+        } else if (Rs2Inventory.contains("Lunar staff")) {
+            Rs2Inventory.equip("Lunar staff");
+            sleep(600);
+        }
+        return true;
+    }
+
+    private boolean rotateSlotToDesiredRotation(int slotId, int currentRotation, int desiredRotation, int slotAcwRotationId, int slotCwRotationId) {
+        int anticlockwiseTurns = (desiredRotation - currentRotation + 2048) % 2048;
+        int clockwiseTurns = (currentRotation - desiredRotation + 2048) % 2048;
+
+        if (clockwiseTurns <= anticlockwiseTurns) {
+            System.out.println("Rotating slot " + slotId + " clockwise " + (clockwiseTurns / 512) + " times.");
+            for (int i = 0; i < clockwiseTurns / 512; i++) {
+                Rs2Widget.clickWidget(slotCwRotationId);
+                sleep(600, 1200);
+            }
+            return true;
+        } else {
+                System.out.println("Rotating slot " + slotId + " anticlockwise " + (anticlockwiseTurns / 512) + " times.");
+                for (int i = 0; i < anticlockwiseTurns / 512; i++) {
+                    Rs2Widget.clickWidget(slotAcwRotationId);
+                    sleep(600, 1200);
+                }
+                return true;
+            }
+
+    }
+
+    public int getDesiredRotation(char letter) {
+        switch (letter) {
+            case 'A':
+            case 'I':
+            case 'P':
+                return 0;
+            case 'B':
+            case 'J':
+            case 'Q':
+                return 512;
+            case 'C':
+            case 'K':
+            case 'R':
+                return 1024;
+            case 'D':
+            case 'L':
+            case 'S':
+                return 1536;
+            default:
+                return -1;
+        }
     }
 }

@@ -32,36 +32,8 @@ import com.google.common.graph.Graphs;
 import com.google.common.graph.MutableGraph;
 import com.google.common.reflect.ClassPath;
 import com.google.common.reflect.ClassPath.ClassInfo;
-import com.google.inject.Binder;
-import com.google.inject.CreationException;
-import com.google.inject.Injector;
-import com.google.inject.Key;
 import com.google.inject.Module;
-import java.io.File;
-import java.io.IOException;
-import java.lang.invoke.CallSite;
-import java.lang.invoke.LambdaMetafactory;
-import java.lang.invoke.MethodHandle;
-import java.lang.invoke.MethodHandles;
-import java.lang.invoke.MethodType;
-import java.lang.reflect.InvocationTargetException;
-import java.lang.reflect.Method;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collection;
-import java.util.HashSet;
-import java.util.Iterator;
-import java.util.List;
-import java.util.Optional;
-import java.util.Set;
-import java.util.concurrent.CopyOnWriteArrayList;
-import java.util.function.BiConsumer;
-import java.util.stream.Collectors;
-import javax.inject.Inject;
-import javax.inject.Named;
-import javax.inject.Provider;
-import javax.inject.Singleton;
-import javax.swing.SwingUtilities;
+import com.google.inject.*;
 import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.client.RuneLite;
@@ -78,6 +50,21 @@ import net.runelite.client.task.Scheduler;
 import net.runelite.client.ui.SplashScreen;
 import net.runelite.client.util.GameEventManager;
 import net.runelite.client.util.ReflectUtil;
+
+import javax.inject.Inject;
+import javax.inject.Named;
+import javax.inject.Provider;
+import javax.inject.Singleton;
+import javax.swing.*;
+import java.io.File;
+import java.io.IOException;
+import java.lang.invoke.*;
+import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Method;
+import java.util.*;
+import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.function.BiConsumer;
+import java.util.stream.Collectors;
 
 @Singleton
 @Slf4j
@@ -101,6 +88,10 @@ public class PluginManager
 
 	@Setter
 	boolean isOutdated;
+
+	public void addPlugin(Plugin plugin) {
+		plugins.add(plugin);
+	}
 
 	@Inject
 	@VisibleForTesting
@@ -151,7 +142,7 @@ public class PluginManager
 				}
 				catch (PluginInstantiationException e)
 				{
-					log.warn("Error during starting/stopping plugin {}", plugin.getClass().getSimpleName(), e);
+					log.error("Error during starting/stopping plugin {}", plugin.getClass().getSimpleName(), e);
 				}
 			}
 		});
@@ -178,7 +169,7 @@ public class PluginManager
 		}
 		catch (Throwable e)
 		{
-			log.warn("Unable to get plugin config", e);
+			log.error("Unable to get plugin config", e);
 		}
 		return null;
 	}
@@ -225,7 +216,7 @@ public class PluginManager
 		}
 		catch (Throwable ex)
 		{
-			log.warn("Unable to reset plugin configuration", ex);
+			log.error("Unable to reset plugin configuration", ex);
 		}
 	}
 
@@ -245,7 +236,7 @@ public class PluginManager
 					}
 					catch (PluginInstantiationException ex)
 					{
-						log.warn("Unable to start plugin {}", plugin.getClass().getSimpleName(), ex);
+						log.error("Unable to start plugin {}", plugin.getClass().getSimpleName(), ex);
 						plugins.remove(plugin);
 					}
 				});
@@ -331,23 +322,18 @@ public class PluginManager
 			{
 				if (clazz.getSuperclass() == Plugin.class)
 				{
-					log.warn("Class {} is a plugin, but has no plugin descriptor", clazz);
+					log.error("Class {} is a plugin, but has no plugin descriptor", clazz);
 				}
 				continue;
 			}
 
 			if (clazz.getSuperclass() != Plugin.class)
 			{
-				log.warn("Class {} has plugin descriptor, but is not a plugin", clazz);
+				log.error("Class {} has plugin descriptor, but is not a plugin", clazz);
 				continue;
 			}
 
 			if (!pluginDescriptor.loadWhenOutdated() && isOutdated)
-			{
-				continue;
-			}
-
-			if (pluginDescriptor.developerPlugin() && !developerMode)
 			{
 				continue;
 			}
@@ -398,7 +384,7 @@ public class PluginManager
 			}
 			catch (PluginInstantiationException ex)
 			{
-				log.warn("Error instantiating plugin!", ex);
+				log.error("Error instantiating plugin!", ex);
 			}
 
 			loaded++;

@@ -24,24 +24,24 @@
  */
 package net.runelite.client.plugins.questhelper.helpers.quests.piratestreasure;
 
-import net.runelite.client.plugins.questhelper.ItemCollections;
-import net.runelite.client.plugins.questhelper.Zone;
+import net.runelite.api.ItemID;
+import net.runelite.api.NpcID;
+import net.runelite.api.ObjectID;
+import net.runelite.api.coords.WorldPoint;
+import net.runelite.api.widgets.ComponentID;
+import net.runelite.client.plugins.questhelper.collections.ItemCollections;
 import net.runelite.client.plugins.questhelper.panel.PanelDetails;
 import net.runelite.client.plugins.questhelper.questhelpers.QuestHelper;
 import net.runelite.client.plugins.questhelper.requirements.ChatMessageRequirement;
 import net.runelite.client.plugins.questhelper.requirements.Requirement;
-import net.runelite.client.plugins.questhelper.requirements.ZoneRequirement;
 import net.runelite.client.plugins.questhelper.requirements.conditional.Conditions;
 import net.runelite.client.plugins.questhelper.requirements.item.ItemRequirement;
 import net.runelite.client.plugins.questhelper.requirements.npc.DialogRequirement;
 import net.runelite.client.plugins.questhelper.requirements.util.LogicType;
 import net.runelite.client.plugins.questhelper.requirements.widget.WidgetTextRequirement;
+import net.runelite.client.plugins.questhelper.requirements.zone.Zone;
+import net.runelite.client.plugins.questhelper.requirements.zone.ZoneRequirement;
 import net.runelite.client.plugins.questhelper.steps.*;
-import net.runelite.api.ItemID;
-import net.runelite.api.NpcID;
-import net.runelite.api.ObjectID;
-import net.runelite.api.coords.WorldPoint;
-import net.runelite.api.widgets.WidgetInfo;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -139,7 +139,7 @@ public class RumSmugglingStep extends ConditionalStep
 	{
 		onKaramja = new ZoneRequirement(karamjaZone1, karamjaZone2, karamjaBoat);
 		Requirement offKaramja = new ZoneRequirement(false, karamjaZone1, karamjaZone2, karamjaBoat);
-		Requirement inPirateTreasureMenu = new WidgetTextRequirement(WidgetInfo.DIARY_QUEST_WIDGET_TITLE, getQuestHelper().getQuest().getName());
+		Requirement inPirateTreasureMenu = new WidgetTextRequirement(ComponentID.DIARY_TITLE, getQuestHelper().getQuest().getName());
 
 		hasRumOffKaramja = new Conditions(LogicType.AND, karamjanRum, offKaramja);
 		hadRumOffKaramja = new Conditions(true, karamjanRum, offKaramja);
@@ -158,7 +158,7 @@ public class RumSmugglingStep extends ConditionalStep
 		/* Filled crate but not sent it and employed */
 		Requirement employedByWydinFromWidget = new Conditions(inPirateTreasureMenu, new WidgetTextRequirement(119, 8, "I have taken a job at"));
 
-		Requirement employedFromDialog = new Conditions(new DialogRequirement("If you could fill it up with bananas, I'll pay you 30<br>gold.", "Have you completed your task yet?", "you should see the old crate"));
+		Requirement employedFromDialog = new Conditions(new DialogRequirement("If you could fill it up with bananas, I'll pay you 30 gold.", "Have you completed your task yet?", "you should see the old crate"));
 		employed = new Conditions(true, LogicType.OR, employedFromDialog, employedFromWidget, employedByWydinFromWidget);
 
 		Requirement stashedRumFromWidget = new Conditions(inPirateTreasureMenu, new WidgetTextRequirement(119, 12, "I have hidden my"));
@@ -186,7 +186,7 @@ public class RumSmugglingStep extends ConditionalStep
 			"Talk to one of the Seamen on the docks in Port Sarim to go to Karamja.", new ItemRequirement("Coins", ItemCollections.COINS, 60));
 		goToKaramja.addDialogStep("Yes please.");
 
-		talkToZambo = new NpcStep(getQuestHelper(), NpcID.ZAMBO, new WorldPoint(2929, 3145, 0),
+		talkToZambo = new NpcStep(getQuestHelper(), NpcID.SUROK_MAGIS, new WorldPoint(2929, 3145, 0),
 			"Talk to Zambo in the Karamja Wines, Spirits and Beers bar. Buy one Karamjan rum.", new ItemRequirement("Coins", ItemCollections.COINS, 30));
 		talkToZambo.addDialogStep("Yes please.");
 
